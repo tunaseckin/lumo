@@ -27,6 +27,29 @@ jobs:
           name: screenshot-linux
           path: bricks-linux.png
 
+  # the one-line installers, against the latest published release
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: install.sh
+        if: runner.os != 'Windows'
+        run: |
+          sh install.sh
+          ~/.local/bin/lumo examples/fizzbuzz.lu | head -3
+      - name: install.ps1
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./install.ps1
+          $p = [Environment]::GetEnvironmentVariable("Path", "User")
+          if (($p -split ";") -notcontains "$env:LOCALAPPDATA\Lumo") { throw "not on PATH: $p" }
+          & "$env:LOCALAPPDATA\Lumo\lumo.exe" examples/fizzbuzz.lu | Select-Object -First 3
+
   windows:
     runs-on: windows-latest
     defaults:
