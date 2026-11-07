@@ -36,7 +36,8 @@
 #define pclose _pclose
 #endif
 #define CC "gcc"
-static char *mkdtemp(char *tpl) { return _mktemp(tpl) && _mkdir(tpl) == 0 ? tpl : NULL; }
+static char *win_mkdtemp(char *tpl) { return _mktemp(tpl) && _mkdir(tpl) == 0 ? tpl : NULL; }
+#define mkdtemp win_mkdtemp /* not in every MinGW */
 #else
 #include <sys/wait.h>
 #include <unistd.h>
@@ -46,7 +47,7 @@ static char *mkdtemp(char *tpl) { return _mktemp(tpl) && _mkdir(tpl) == 0 ? tpl 
 #include <mach-o/dyld.h>
 #endif
 
-#define LUMO_VERSION "0.1.0"
+#define LUMO_VERSION "0.2.0"
 
 #ifdef LUMO_HAVE_SRC /* `make` embeds lumo's own source, so `lumo build --fast` can recompile it */
 #include "lumo_src.h"

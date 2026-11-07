@@ -10,7 +10,7 @@ Thanks for trying Lumo! It's young, so every report helps.
 
 ## Working on the code
 
-The whole language is one C file, [lumo.c](lumo.c), plus [gfx_macos.m](gfx_macos.m) for graphics on macOS.
+The whole language is one C file, [lumo.c](lumo.c), plus [gfx_macos.m](gfx_macos.m) and [gfx.c](gfx.c) for graphics (macOS, and Windows/Linux).
 [docs/nasil-calisir.md](docs/nasil-calisir.md) explains how it fits together (in Turkish for now).
 
 ```bash
@@ -28,7 +28,6 @@ Match the style around you: short functions, a comment where the *why* isn't obv
 
 ## Good first issues
 
-- **Graphics on Linux and Windows.** `gfx_macos.m` shows the 15 functions a backend needs; SDL or raylib would work.
 - **Unicode `upper`/`lower`.** They only change ASCII letters today, so `upper("ğ")` stays `"ğ"`.
 - **Error messages in other languages**, starting with Turkish.
 - **`--fast` for strings and structs.** Today only numbers, bools and lists of numbers compile to C.

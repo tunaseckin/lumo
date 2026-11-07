@@ -7,11 +7,12 @@ function activate(context) {
     if (!editor) return;
     await editor.document.save();
     const lumo = vscode.workspace.getConfiguration('lumo').get('path') || 'lumo';
-    const quote = s => "'" + s.replace(/'/g, "'\\''") + "'";
+    const win = process.platform === 'win32'; // VS Code's terminal there is PowerShell
+    const quote = s => win ? "'" + s.replace(/'/g, "''") + "'" : "'" + s.replace(/'/g, "'\\''") + "'";
     let term = vscode.window.terminals.find(t => t.name === 'Lumo');
     if (!term) term = vscode.window.createTerminal('Lumo');
     term.show(true);
-    term.sendText(`${quote(lumo)} ${quote(editor.document.fileName)}`);
+    term.sendText(`${win ? '& ' : ''}${quote(lumo)} ${quote(editor.document.fileName)}`);
   }));
 }
 

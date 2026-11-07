@@ -24,13 +24,15 @@ print(json_encode(todos))             # [{"text":"write docs","done":false},...]
 - **Optional types**, checked before the program runs: `fn area(r: num) -> num`. Code without types keeps working.
 - **Everything is an expression:** `if`, `try` and blocks all return values.
 - **Batteries:** structs, maps, closures, modules, `try`/`catch`, `${}` string interpolation, JSON, files, time and shell commands.
-- **Graphics built in:** open a window and make a game in a few lines with `gfx` (macOS for now).
+- **Graphics built in:** open a window and make a game in a few lines with `gfx`, on macOS, Windows and Linux.
 - **Friendly errors** that show the line and suggest fixes: `'nmae' is not defined (did you mean 'name'?)`.
 - **Share what you make:** `lumo build game.lu` gives you one file that runs without Lumo installed.
 - **Fast when you need it:** `lumo --fast` compiles typed numeric functions to machine code: 1–3× Rust's time on the benchmarks below, 8–30× faster than Python.
 - **Small:** the whole implementation is one readable C file (scanner, compiler, VM, GC).
 
 ## Get started
+
+**Download:** [Releases](https://github.com/tunaseckin/lumo/releases) has ready-made builds for Windows, macOS (Apple Silicon) and Linux, plus `lumo-lang.vsix` for VS Code. Or build it yourself (needs a C compiler; on Windows, MSYS2 with `mingw-w64-ucrt-x86_64-gcc`):
 
 ```bash
 make                         # build ./lumo (needs a C compiler)
@@ -80,9 +82,9 @@ while gfx.frame() {                      # 60 times a second, until the window c
 
 To record a game, run it with `LUMO_RECORD=some/folder`: every second frame is saved as a PNG (turn them into a GIF with ffmpeg).
 
-Colors are names (`"red"`, `"orange"`, `"navy"`, ...), `"#rrggbb"`/`"#rrggbbaa"`, or `[r, g, b]`/`[r, g, b, a]` with parts from 0 to 255. Coordinates are in points with (0, 0) at the top left. Games packaged with `lumo build` run on any Mac.
+Colors are names (`"red"`, `"orange"`, `"navy"`, ...), `"#rrggbb"`/`"#rrggbbaa"`, or `[r, g, b]`/`[r, g, b, a]` with parts from 0 to 255. Coordinates are in points with (0, 0) at the top left. Games packaged with `lumo build` run on any computer with the same system.
 
-Graphics currently need macOS (`make` builds them in using only system frameworks). On other systems `lumo` builds without them and `gfx.window` says so.
+Graphics use only the system's own libraries: Cocoa on macOS, Win32 on Windows, X11 on Linux (loaded when a window opens, so `lumo` still runs on servers). On Windows and Linux Lumo draws text with its built-in font (Poppins Bold, [OFL](docs/fonts/OFL.txt)); it covers English and Turkish letters and common Western European ones. Sounds are the macOS system sound names; Windows and Linux play their own alert sounds for them.
 
 ## Errors
 
@@ -122,7 +124,7 @@ These are small numeric benchmarks, which is exactly the kind of code `--fast` h
 
 ## Sharing programs
 
-`lumo build app.lu` writes `app`: a copy of the Lumo runtime with your program and every file it imports packed inside. It runs on machines without Lumo, gets all command-line arguments in `args`, and refuses to build if the program has errors. (macOS may warn about an unsigned download, as it does for any app from the internet.)
+`lumo build app.lu` writes `app`: a copy of the Lumo runtime with your program and every file it imports packed inside. It runs on machines without Lumo, gets all command-line arguments in `args`, and refuses to build if the program has errors. On Windows the file is `app.exe`. (macOS and Windows may warn about an unsigned download, as they do for any app from the internet.)
 
 ## Rules
 
@@ -235,6 +237,7 @@ Lumo was designed and written with heavy help from an AI assistant (Claude). The
 ```
 lumo.c            the whole language
 gfx_macos.m       the graphics backend for macOS
+gfx.c             the graphics backend for Windows and Linux (gfx_font.h: its font, made by tools/bake_font.py)
 tests/            test.lu (language tests), fast.lu (--fast equivalence) and run.sh (runs everything)
 docs/             beginner guides (English, Turkish) and how the implementation works
 examples/         example programs
@@ -249,7 +252,7 @@ prototype/        the first Python version, kept for reference
 - methods on structs (use plain functions and `|>`: `p |> norm2()`)
 - naming another module's struct as a type (`geo.Point` is `any`)
 - private module names (everything at a module's top level is visible to importers)
-- graphics on Linux and Windows, images/sprites, 3D
+- images/sprites, 3D
 - HTTP, regex, concurrency
 - Unicode `upper`/`lower` (ASCII only)
 

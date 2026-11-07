@@ -31,9 +31,14 @@ jobs:
           cp lumo README.md LICENSE "$dir"/
           cp -r examples docs "$dir"/
           tar czf "$dir.tar.gz" "$dir"
+      - name: VS Code extension
+        if: runner.os == 'Linux'
+        run: python3 editor/vscode/build_vsix.py && cp editor/vscode/lumo-lang.vsix .
       - uses: softprops/action-gh-release@v2
         with:
-          files: lumo-*.tar.gz
+          files: |
+            lumo-*.tar.gz
+            lumo-lang.vsix
 
   windows:
     runs-on: windows-latest
