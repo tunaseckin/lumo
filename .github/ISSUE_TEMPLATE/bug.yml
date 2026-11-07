@@ -1,0 +1,29 @@
+name: Bug or confusing error
+description: Lumo crashed, gave a wrong result, or printed an error that didn't help
+labels: [bug]
+body:
+  - type: textarea
+    id: code
+    attributes:
+      label: The code
+      description: The smallest .lu program that shows the problem
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: Paste the exact output or error message
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: input
+    id: version
+    attributes:
+      label: Version and system
+      description: Output of `lumo --version`, and your OS (e.g. macOS 15, Ubuntu 24.04)

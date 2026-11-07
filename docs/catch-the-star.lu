@@ -1,0 +1,43 @@
+# Catch the Star: catch the falling stars with your basket!
+# Move with the arrow keys. Miss three and the game is over.
+# Run it: lumo docs/catch-the-star.lu   (guide: docs/getting-started.md)
+
+gfx.window(800, 600, "Catch the Star")
+let star_x = 400
+let star_y = 0
+let basket_x = 400
+let score = 0
+let lives = 3
+
+while gfx.frame() {
+    if gfx.key("left") { basket_x = basket_x - 8 }
+    if gfx.key("right") { basket_x = basket_x + 8 }
+
+    if lives > 0 {
+        star_y = star_y + 4
+
+        if star_y > 530 and star_y < 560 and abs(star_x - basket_x) < 60 {
+            score = score + 1
+            star_y = 0
+            star_x = random() * 760 + 20
+        }
+
+        if star_y > 600 {
+            lives = lives - 1
+            star_y = 0
+            star_x = random() * 760 + 20
+        }
+    } else if gfx.pressed("space") {
+        score = 0
+        lives = 3
+    }
+
+    gfx.clear("navy")
+    gfx.circle(star_x, star_y, 15, "yellow")
+    gfx.rect(basket_x - 60, 550, 120, 20, "orange", 8)
+    gfx.text("Score: ${score}   Lives: ${lives}", 20, 20, 24, "white")
+    if lives == 0 {
+        gfx.text("GAME OVER", 285, 240, 48, "red")
+        gfx.text("press space to play again", 270, 310, 20, "white")
+    }
+}

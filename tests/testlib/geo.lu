@@ -1,0 +1,12 @@
+# a module: its top-level names become fields of the importer's `geo`
+let pi = 3.14159
+let calls_made = 0
+
+fn area(r) {
+    calls_made = calls_made + 1
+    pi * r * r
+}
+fn calls() { calls_made }
+
+import "helper.lu"   # relative to this file, so testlib/helper.lu
+fn shout(s) { helper.up(s) + "!" }

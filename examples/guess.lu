@@ -1,0 +1,23 @@
+#!/usr/bin/env lumo
+# Guess the number. Shows input(), num() and try/catch.
+
+let secret = floor(random() * 100) + 1
+let tries = 0
+print("I picked a number from 1 to 100.")
+
+while true {
+    let line = input("your guess: ")
+    if line == nil { break }   # end of input (ctrl-d)
+    let guess = try { num(trim(line)) } catch { nil }
+    if guess == nil {
+        print("that's not a number")
+        continue
+    }
+    tries = tries + 1
+    if guess < secret { print("higher") }
+    else if guess > secret { print("lower") }
+    else {
+        print("yes! ${tries} tries")
+        break
+    }
+}

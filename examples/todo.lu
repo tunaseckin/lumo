@@ -1,0 +1,46 @@
+#!/usr/bin/env lumo
+# A tiny todo app that keeps its list in a JSON file.
+# usage:
+#   lumo examples/todo.lu add "buy milk"
+#   lumo examples/todo.lu done 1
+#   lumo examples/todo.lu          (list)
+
+struct Todo { text: str, done: bool }
+
+fn get_or(v, d) { if v == nil { d } else { v } }
+let file = get_or(env("HOME"), ".") + "/.lumo_todos.json"
+
+fn load() -> list {
+    if not exists(file) { return [] }
+    map(json_decode(read_file(file)), fn(t) { Todo(t.text, t.done) })
+}
+
+fn save(todos: list) {
+    write_file(file, json_encode(todos))
+}
+
+let todos = load()
+let cmd = if len(args) > 0 { args[0] } else { "list" }
+
+if cmd == "add" and len(args) > 1 {
+    push(todos, Todo(join(slice(args, 1), " "), false))
+    save(todos)
+    print("added: ${todos[-1].text}")
+} else if cmd == "done" and len(args) > 1 {
+    let i = num(args[1]) - 1
+    let picked = try { todos[i] } catch { nil }
+    if picked == nil {
+        print("no todo #${args[1]}")
+    } else {
+        picked.done = true
+        save(todos)
+        print("done: ${picked.text}")
+    }
+} else {
+    if len(todos) == 0 { print("nothing to do") }
+    let n = 0
+    for t in todos {
+        n = n + 1
+        print("${n}. [${if t.done { "x" } else { " " }}] ${t.text}")
+    }
+}

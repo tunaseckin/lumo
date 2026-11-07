@@ -1,0 +1,24 @@
+name: Feedback
+description: Something confusing, missing or great while learning or using Lumo
+labels: [feedback]
+body:
+  - type: dropdown
+    id: experience
+    attributes:
+      label: Your programming experience
+      options:
+        - Never programmed before
+        - A little (a course or tutorial)
+        - I program regularly
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Where did you get stuck, what surprised you, what did you wish Lumo had?
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: e.g. "getting-started step 8", "error message for ...", "README"

@@ -1,0 +1,63 @@
+# Lumo tour
+
+let name = "Lumo"
+print("hello from", name)
+
+# functions; the last expression is the result
+fn fib(n) {
+    if n < 2 { n } else { fib(n - 1) + fib(n - 2) }
+}
+print("fib(20) =", fib(20))
+
+# if is an expression
+let size = if len(name) > 3 { "long" } else { "short" }
+print("name is", size)
+
+# pipes: x |> f(y) is f(x, y)
+let total = range(1, 11)
+    |> filter(fn(x) { x % 2 == 0 })
+    |> map(fn(x) { x * x })
+    |> reduce(0, fn(a, b) { a + b })
+print("sum of even squares 1..10 =", total)
+
+# closures
+fn counter() {
+    let n = 0
+    fn() {
+        n = n + 1
+        n
+    }
+}
+let next = counter()
+next()
+print("counter:", next())
+
+# loops and lists
+let xs = []
+for i in range(5) {
+    if i == 3 { continue }
+    push(xs, i * 10)
+}
+print(xs, "has", len(xs), "items")
+
+# maps keep insertion order; m.key is m["key"]
+let user = {name: "Ada", langs: ["lumo", "c"]}
+user.age = 36
+for k in user { print(k, "=", user[k]) }
+
+# strings know about UTF-8
+print(len("ğüş"), upper("lumo"), split("a-b-c", "-") |> join("+"))
+
+# structs: typed records with fixed fields
+struct Point { x: num, y: num }
+fn dist2(a: Point, b: Point) -> num {
+    let dx = a.x - b.x
+    let dy = a.y - b.y
+    dx * dx + dy * dy
+}
+let home = Point(0, 0)
+print(home, "to", Point(3, 4), "=", sqrt(dist2(home, Point(3, 4))))
+
+# errors are values you can catch
+let parsed = try { num("abc") } catch e { "bad number (${e})" }
+print(parsed)

@@ -1,0 +1,10 @@
+#!/usr/bin/env lumo
+# The classic, written with an if-expression.
+
+for n in 1..20 {
+    let word = if n % 15 == 0 { "FizzBuzz" }
+        else if n % 3 == 0 { "Fizz" }
+        else if n % 5 == 0 { "Buzz" }
+        else { str(n) }
+    print(word)
+}

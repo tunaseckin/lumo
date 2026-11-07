@@ -1,0 +1,62 @@
+{
+  "name": "Lumo",
+  "scopeName": "source.lumo",
+  "fileTypes": ["lu"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#fndef" },
+    { "include": "#structdef" },
+    { "include": "#type" },
+    { "include": "#keyword" },
+    { "include": "#storage" },
+    { "include": "#constant" },
+    { "include": "#number" },
+    { "include": "#call" },
+    { "include": "#operator" }
+  ],
+  "repository": {
+    "comment": { "name": "comment.line.number-sign.lumo", "match": "#.*$" },
+    "string": {
+      "name": "string.quoted.double.lumo",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.lumo", "match": "\\\\." },
+        {
+          "name": "meta.interpolation.lumo",
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.lumo" } },
+          "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.lumo" } },
+          "contentName": "source.lumo",
+          "patterns": [{ "include": "$self" }]
+        }
+      ]
+    },
+    "fndef": {
+      "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": { "1": { "name": "storage.type.function.lumo" }, "2": { "name": "entity.name.function.lumo" } }
+    },
+    "structdef": {
+      "match": "\\b(struct)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": { "1": { "name": "storage.type.struct.lumo" }, "2": { "name": "entity.name.type.lumo" } }
+    },
+    "type": {
+      "match": "(:|->)\\s*(num|str|bool|any|list|map|nil)\\b",
+      "captures": { "1": { "name": "punctuation.separator.lumo" }, "2": { "name": "support.type.lumo" } }
+    },
+    "keyword": {
+      "name": "keyword.control.lumo",
+      "match": "\\b(if|else|while|for|in|return|break|continue|try|catch|import|as)\\b"
+    },
+    "storage": { "name": "storage.type.lumo", "match": "\\b(let|fn|struct)\\b" },
+    "constant": { "name": "constant.language.lumo", "match": "\\b(true|false|nil)\\b" },
+    "number": { "name": "constant.numeric.lumo", "match": "\\b[0-9]+(\\.[0-9]+)?\\b" },
+    "call": { "name": "entity.name.function.call.lumo", "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\()" },
+    "operator": {
+      "name": "keyword.operator.lumo",
+      "match": "\\|>|->|==|!=|<=|>=|[-+*/%<>=]|\\b(and|or|not)\\b"
+    }
+  }
+}

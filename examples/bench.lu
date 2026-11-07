@@ -1,0 +1,49 @@
+#!/usr/bin/env lumo
+# Benchmarks. Compare:  lumo examples/bench.lu   vs   lumo --fast examples/bench.lu
+
+fn fib(n: num) -> num { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }
+
+fn is_prime(n: num) -> bool {
+    if n < 2 { return false }
+    let d = 2
+    while d * d <= n {
+        if n % d == 0 { return false }
+        d = d + 1
+    }
+    true
+}
+
+fn count_primes(limit: num) -> num {
+    let c = 0
+    for i in 1..limit {
+        if is_prime(i) { c = c + 1 }
+    }
+    c
+}
+
+fn sieve(flags: list[num]) -> num {   # flags starts all 1; returns how many primes
+    let n = len(flags) - 1
+    let c = 0
+    for i in 2..n {
+        if flags[i] == 1 {
+            c = c + 1
+            let j = i * i
+            while j <= n {
+                flags[j] = 0
+                j = j + i
+            }
+        }
+    }
+    c
+}
+
+fn timed(name: str, f) {
+    let t = now()
+    let r = f()
+    print("${name}  ${r}  ${round((now() - t) * 1000)} ms")
+}
+
+timed("fib(32)          ", fn() { fib(32) })
+timed("primes < 300000  ", fn() { count_primes(300000) })
+let flags = map(0..5000000, fn(i) { 1 })
+timed("sieve(5000000)   ", fn() { sieve(flags) })

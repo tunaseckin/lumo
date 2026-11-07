@@ -1,0 +1,43 @@
+# Yıldız Yakala: düşen yıldızları sepetinle yakala!
+# Sepeti ← → tuşlarıyla oynat. Üç yıldız kaçırırsan oyun biter.
+# Çalıştırmak için: lumo docs/yildiz-yakala.lu   (rehber: docs/baslangic.md)
+
+gfx.window(800, 600, "Yıldız Yakala")
+let yıldız_x = 400
+let yıldız_y = 0
+let sepet_x = 400
+let skor = 0
+let can = 3
+
+while gfx.frame() {
+    if gfx.key("left") { sepet_x = sepet_x - 8 }
+    if gfx.key("right") { sepet_x = sepet_x + 8 }
+
+    if can > 0 {
+        yıldız_y = yıldız_y + 4
+
+        if yıldız_y > 530 and yıldız_y < 560 and abs(yıldız_x - sepet_x) < 60 {
+            skor = skor + 1
+            yıldız_y = 0
+            yıldız_x = random() * 760 + 20
+        }
+
+        if yıldız_y > 600 {
+            can = can - 1
+            yıldız_y = 0
+            yıldız_x = random() * 760 + 20
+        }
+    } else if gfx.pressed("space") {
+        skor = 0
+        can = 3
+    }
+
+    gfx.clear("navy")
+    gfx.circle(yıldız_x, yıldız_y, 15, "yellow")
+    gfx.rect(sepet_x - 60, 550, 120, 20, "orange", 8)
+    gfx.text("Skor: ${skor}   Can: ${can}", 20, 20, 24, "white")
+    if can == 0 {
+        gfx.text("OYUN BİTTİ", 290, 240, 48, "red")
+        gfx.text("tekrar oynamak için boşluk tuşuna bas", 215, 310, 20, "white")
+    }
+}

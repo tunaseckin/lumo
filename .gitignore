@@ -1,0 +1,6 @@
+/lumo
+*.o
+.DS_Store
+*.vsix
+*.wad
+lumo_src.h

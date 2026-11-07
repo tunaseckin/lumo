@@ -1,0 +1,211 @@
+#!/usr/bin/env lumo
+# Bricks: break every brick with the ball.
+# Move with the mouse or the arrow keys, launch with space or a click. Levels get faster.
+# Set BRICKS_DEMO=1 to watch it play itself.
+# (needs the macOS build of lumo: run `make`)
+
+let W = 800
+let H = 600
+let BW = 64       # brick size
+let BH = 22
+let R = 8         # ball radius
+let PADDLE_Y = H - 46
+
+struct Ball { x: num, y: num, dx: num, dy: num, stuck: bool }
+struct Brick { x: num, y: num, color: str, alive: bool }
+struct Spark { x: num, y: num, dx: num, dy: num, life: num, color: str }
+
+let COLORS = ["red", "orange", "yellow", "green", "cyan", "purple"]
+let paddle = {x: W / 2, w: 120}
+let ball = Ball(W / 2, PADDLE_Y - R, 0, 0, true)
+let bricks = []
+let sparks = []
+let trail = []
+let score = 0
+let lives = 3
+let level = 1
+let banner = 2      # seconds left to show "LEVEL n"
+let state = "play"  # "play" or "over"
+let last_mouse_x = -1
+let demo = env("BRICKS_DEMO") != nil
+
+fn get_or(v, d) { if v == nil { d } else { v } }
+let BEST_FILE = get_or(env("HOME"), ".") + "/.lumo_bricks.json"
+let best = try { json_decode(read_file(BEST_FILE)) } catch { 0 }
+
+fn build_level() {
+    bricks = []
+    for row in range(6) {
+        for col in range(10) {
+            push(bricks, Brick(40 + col * 72, 80 + row * 30, COLORS[row], true))
+        }
+    }
+}
+
+fn reset_ball() {
+    ball = Ball(paddle.x, PADDLE_Y - R, 0, 0, true)
+    trail = []
+}
+
+fn launch() {
+    let speed = 380 + level * 50
+    let angle = random() * 0.8 - 0.4
+    ball.dx = speed * sin(angle)
+    ball.dy = -speed * cos(angle)
+    ball.stuck = false
+    gfx.sound("Pop")
+}
+
+fn burst(x: num, y: num, color: str) {
+    for i in range(14) {
+        let a = random() * 2 * pi
+        let s = 60 + random() * 220
+        push(sparks, Spark(x, y, cos(a) * s, sin(a) * s, 0.4 + random() * 0.4, color))
+    }
+}
+
+fn center(s: str, y: num, size: num, color) {
+    gfx.text(s, (W - gfx.text_width(s, size)) / 2, y, size, color)
+}
+
+fn move_ball(dt: num) {
+    ball.x = ball.x + ball.dx * dt
+    ball.y = ball.y + ball.dy * dt
+
+    # walls
+    if ball.x < R { ball.x = R; ball.dx = abs(ball.dx); gfx.sound("Tink") }
+    if ball.x > W - R { ball.x = W - R; ball.dx = -abs(ball.dx); gfx.sound("Tink") }
+    if ball.y < R { ball.y = R; ball.dy = abs(ball.dy); gfx.sound("Tink") }
+
+    # paddle: where it hits decides the bounce angle
+    let half = paddle.w / 2
+    if ball.dy > 0 and ball.y + R >= PADDLE_Y and ball.y + R <= PADDLE_Y + 16 and abs(ball.x - paddle.x) <= half + R {
+        let hit = max(-1, min(1, (ball.x - paddle.x) / half))
+        let speed = sqrt(ball.dx * ball.dx + ball.dy * ball.dy)
+        ball.dx = speed * sin(hit)
+        ball.dy = -speed * cos(hit)
+        ball.y = PADDLE_Y - R
+        gfx.sound("Pop")
+    }
+
+    # bricks
+    for b in bricks {
+        if b.alive and ball.x + R > b.x and ball.x - R < b.x + BW and ball.y + R > b.y and ball.y - R < b.y + BH {
+            b.alive = false
+            score = score + 10 * level
+            let ox = min(ball.x + R - b.x, b.x + BW - (ball.x - R))
+            let oy = min(ball.y + R - b.y, b.y + BH - (ball.y - R))
+            if ox < oy { ball.dx = -ball.dx } else { ball.dy = -ball.dy }
+            burst(b.x + BW / 2, b.y + BH / 2, b.color)
+            gfx.sound("Tink")
+            break
+        }
+    }
+
+    # fell off the bottom
+    if ball.y > H + 30 {
+        lives = lives - 1
+        if lives == 0 {
+            state = "over"
+            if score > best {
+                best = score
+                write_file(BEST_FILE, json_encode(best))
+            }
+            gfx.sound("Basso")
+        } else {
+            gfx.sound("Funk")
+            reset_ball()
+        }
+    }
+
+    # cleared the level
+    if all(bricks, fn(b) { not b.alive }) {
+        level = level + 1
+        banner = 2
+        gfx.sound("Hero")
+        build_level()
+        reset_ball()
+    }
+}
+
+fn update(dt: num) {
+    let m = gfx.mouse()
+    if gfx.key("left") { paddle.x = paddle.x - 650 * dt }
+    if gfx.key("right") { paddle.x = paddle.x + 650 * dt }
+    if m.x != last_mouse_x and m.x >= 0 and m.x <= W { paddle.x = m.x }   # mouse only when it moves
+    last_mouse_x = m.x
+    if demo { paddle.x = ball.x + sin(now() * 3) * 40 }
+    paddle.x = max(paddle.w / 2, min(W - paddle.w / 2, paddle.x))
+
+    let go = gfx.pressed("space") or m.clicked or demo
+    if state == "over" {
+        if go {
+            score = 0
+            lives = 3
+            level = 1
+            banner = 2
+            state = "play"
+            build_level()
+            reset_ball()
+        }
+    } else if ball.stuck {
+        ball.x = paddle.x
+        if go { launch() }
+    } else {
+        move_ball(dt)
+        push(trail, [ball.x, ball.y])
+        if len(trail) > 10 { trail = slice(trail, 1) }
+    }
+
+    for s in sparks {
+        s.x = s.x + s.dx * dt
+        s.y = s.y + s.dy * dt
+        s.dy = s.dy + 500 * dt   # gravity
+        s.life = s.life - dt
+    }
+    sparks = filter(sparks, fn(s) { s.life > 0 })
+    banner = max(0, banner - dt)
+}
+
+fn draw() {
+    gfx.clear("#0f172a")
+
+    for b in bricks {
+        if b.alive {
+            gfx.rect(b.x, b.y + 3, BW, BH, [0, 0, 0, 90], 6)   # shadow
+            gfx.rect(b.x, b.y, BW, BH, b.color, 6)
+            gfx.rect(b.x + 4, b.y + 3, BW - 8, 5, [255, 255, 255, 70], 3)   # shine
+        }
+    }
+
+    for s in sparks { gfx.circle(s.x, s.y, 1 + s.life * 5, s.color) }
+
+    let i = 0
+    for p in trail {
+        i = i + 1
+        gfx.circle(p[0], p[1], R * i / len(trail), [255, 255, 255, 12 * i])
+    }
+    gfx.circle(ball.x, ball.y, R, "white")
+    gfx.rect(paddle.x - paddle.w / 2, PADDLE_Y, paddle.w, 14, "white", 7)
+
+    gfx.text("SCORE ${score}", 20, 22, 20, "white")
+    center("LEVEL ${level}", 22, 20, "silver")
+    for n in range(lives) { gfx.circle(W - 30 - n * 24, 34, 7, "red") }
+    gfx.text("BEST ${max(best, score)}", 20, 46, 13, "gray")
+
+    if banner > 0 and state == "play" { center("LEVEL ${level}", 300, 56, [255, 255, 255, min(255, banner * 255)]) }
+    if state == "play" and ball.stuck and banner == 0 { center("space or click to launch", 400, 20, "silver") }
+    if state == "over" {
+        gfx.rect(0, 0, W, H, [0, 0, 0, 170])
+        center("GAME OVER", 220, 64, "red")
+        center("score ${score}   best ${best}", 310, 26, "white")
+        center("space or click to play again", 370, 20, "silver")
+    }
+}
+
+gfx.window(W, H, "Lumo Bricks")
+build_level()
+while gfx.frame() {
+    update(min(gfx.delta(), 1 / 30))
+    draw()
+}

@@ -1,0 +1,113 @@
+# Reading Doom WAD files: the game's maps, pictures and palettes.
+# A WAD is "IWAD" + lump count + directory offset; the directory lists each lump's position, size and name.
+
+fn u16(d: list, o: num) -> num { d[o] | (d[o + 1] << 8) }
+
+fn s16(d: list, o: num) -> num {
+    let v = u16(d, o)
+    if v >= 32768 { v - 65536 } else { v }
+}
+
+fn s32(d: list, o: num) -> num { d[o] | (d[o + 1] << 8) | (d[o + 2] << 16) | (d[o + 3] << 24) }
+
+fn open(path: str) {
+    let d = read_bytes(path)
+    let kind = bytes_str(d, 0, 4)
+    if kind != "IWAD" and kind != "PWAD" { error("${path} is not a WAD file") }
+    let count = s32(d, 4)
+    let dir = s32(d, 8)
+    let lumps = []
+    for i in range(count) {
+        let o = dir + i * 16
+        push(lumps, {pos: s32(d, o), size: s32(d, o + 4), name: bytes_str(d, o + 8, 8)})
+    }
+    {data: d, lumps: lumps}
+}
+
+# index of the first lump called `name` at or after `start`, or -1
+fn find(w, name: str, start: num) -> num {
+    for i in range(start, len(w.lumps)) {
+        if w.lumps[i].name == name { return i }
+    }
+    -1
+}
+
+fn lump(w, name: str) {
+    let i = find(w, name, 0)
+    if i < 0 { error("lump ${name} not found") }
+    w.lumps[i]
+}
+
+# PLAYPAL holds 14 palettes of 256 RGB colors; the first is the normal one
+fn palette(w) -> list {
+    let l = lump(w, "PLAYPAL")
+    let d = w.data
+    map(range(256), fn(i) {
+        let o = l.pos + i * 3
+        (d[o] << 16) | (d[o + 1] << 8) | d[o + 2]
+    })
+}
+
+# Pictures are stored as columns of "posts" (runs of pixels) with transparent gaps:
+# header (width, height, x/y offsets), then one offset per column; a post is
+# top, length, pad, pixels..., pad; a top of 255 ends the column.
+fn draw_picture(w, name: str, buf: list, bw: num, bh: num, x0: num, y0: num) {
+    let d = w.data
+    let p = lump(w, name).pos
+    let width = u16(d, p)
+    for x in range(width) {
+        let col = p + s32(d, p + 8 + x * 4)
+        while d[col] != 255 {
+            let top = d[col]
+            let n = d[col + 1]
+            let px = x0 + x
+            if px >= 0 and px < bw {
+                for i in range(n) {
+                    let py = y0 + top + i
+                    if py >= 0 and py < bh { buf[py * bw + px] = d[col + 3 + i] }
+                }
+            }
+            col = col + n + 4
+        }
+    }
+}
+
+# A level is the map marker (E1M1, ...) followed by THINGS, LINEDEFS, SIDEDEFS, VERTEXES, ...
+fn level(w, name: str) {
+    let m = find(w, name, 0)
+    if m < 0 { error("map ${name} not found") }
+    let d = w.data
+    let things = w.lumps[m + 1]
+    let lines = w.lumps[m + 2]
+    let verts = w.lumps[m + 4]
+
+    let vx = []
+    let vy = []
+    for i in range(verts.size / 4) {
+        push(vx, s16(d, verts.pos + i * 4))
+        push(vy, s16(d, verts.pos + i * 4 + 2))
+    }
+
+    # linedef: start vertex, end vertex, flags, special, tag, right side, left side (-1 = none)
+    let walls = []
+    for i in range(lines.size / 14) {
+        let o = lines.pos + i * 14
+        let a = u16(d, o)
+        let b = u16(d, o + 2)
+        let flags = u16(d, o + 4)
+        push(walls, {
+            x1: vx[a], y1: vy[a], x2: vx[b], y2: vy[b],
+            two_sided: s16(d, o + 12) != -1,
+            secret: (flags & 32) != 0,
+            door: u16(d, o + 6) != 0,
+        })
+    }
+
+    # thing: x, y, angle, type, flags
+    let ts = []
+    for i in range(things.size / 10) {
+        let o = things.pos + i * 10
+        push(ts, {x: s16(d, o), y: s16(d, o + 2), angle: s16(d, o + 4), type: u16(d, o + 6)})
+    }
+    {name: name, walls: walls, things: ts}
+}

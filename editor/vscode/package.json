@@ -1,0 +1,44 @@
+{
+  "name": "lumo-lang",
+  "displayName": "Lumo",
+  "description": "Lumo language support: syntax highlighting and a Run button",
+  "version": "0.1.0",
+  "publisher": "lumo-lang",
+  "license": "MIT",
+  "engines": { "vscode": "^1.70.0" },
+  "categories": ["Programming Languages"],
+  "main": "./extension.js",
+  "activationEvents": ["onLanguage:lumo"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "lumo",
+        "aliases": ["Lumo", "lumo"],
+        "extensions": [".lu"],
+        "firstLine": "^#!.*\\blumo\\b",
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      { "language": "lumo", "scopeName": "source.lumo", "path": "./syntaxes/lumo.tmLanguage.json" }
+    ],
+    "commands": [
+      { "command": "lumo.run", "title": "Run Lumo File", "category": "Lumo", "icon": "$(play)" }
+    ],
+    "menus": {
+      "editor/title": [
+        { "command": "lumo.run", "when": "editorLangId == lumo", "group": "navigation" }
+      ]
+    },
+    "configuration": {
+      "title": "Lumo",
+      "properties": {
+        "lumo.path": {
+          "type": "string",
+          "default": "lumo",
+          "description": "Path to the lumo executable."
+        }
+      }
+    }
+  }
+}

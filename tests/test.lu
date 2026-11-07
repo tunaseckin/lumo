@@ -1,0 +1,259 @@
+# run: ./lumo test.lu   (prints "ok")
+
+# numbers and operators
+assert(1 + 2 * 3 == 7)
+assert(7 / 2 == 3.5 and 6 / 2 == 3)
+assert(-1 % 3 == 2)
+assert(not 1 == 2)
+assert("a" + "b" == "ab" and [1] + [2] == [1, 2])
+assert(1 == 1.0 and 1 != true and nil == nil)
+
+# functions, recursion, closures
+fn fib(n) { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }
+assert(fib(15) == 610)
+
+fn counter() {
+    let n = 0
+    fn() {
+        n = n + 1
+        n
+    }
+}
+let c = counter()
+c()
+assert(c() == 2)
+
+let fs = []
+for i in range(3) { push(fs, fn() { i }) }
+assert(fs[0]() == 0 and fs[2]() == 2)
+
+fn early(x) {
+    if x > 0 { return "pos" }
+    "other"
+}
+assert(early(1) == "pos" and early(-1) == "other")
+
+# pipes and the Lumo-written prelude
+assert([1, 2, 3] |> map(fn(x) { x * 2 }) |> reduce(0, fn(a, b) { a + b }) == 12)
+assert(range(10) |> filter(fn(x) { x % 3 == 0 }) == [0, 3, 6, 9])
+
+# control flow
+let x = if false { 1 }
+else if true { 2 }
+else { 3 }
+assert(x == 2)
+
+let evens = []
+let i = 0
+while true {
+    i = i + 1
+    if i > 10 { break }
+    if i % 2 == 1 { continue }
+    push(evens, i)
+}
+assert(evens == [2, 4, 6, 8, 10])
+
+let total = 0
+for n in range(1, 101) { total = total + n }
+assert(total == 5050)
+
+# lists
+let xs = [3, 1, 2]
+xs[0] = 9
+assert(sort(xs) == [1, 2, 9] and xs[-1] == 9 and pop(xs) == 9 and len(xs) == 2)
+assert(slice([1, 2, 3, 4], 1, 3) == [2, 3] and contains([1, [2]], [2]))
+
+# maps (keep insertion order)
+let m = {name: "lumo", "age": 1}
+assert(m.name == "lumo" and m["age"] == 1)
+m.age = 2
+m["new"] = true
+assert(len(m) == 3 and keys(m) == ["name", "age", "new"])
+assert(remove(m, "new") and not has(m, "new") and get(m, "zzz", 5) == 5)
+assert({a: [1, {b: 2}]} == {a: [1, {b: 2}]})
+let seen = []
+for k in {x: 1, y: 2} { push(seen, k) }
+assert(seen == ["x", "y"])
+
+# strings are UTF-8 aware
+assert(len("ğüş") == 3 and "ğüş"[1] == "ü" and slice("hello", -3) == "llo")
+let letters = []
+for ch in "aç" { push(letters, ch) }
+assert(letters == ["a", "ç"])
+assert(split("a,b,c", ",") == ["a", "b", "c"] and join(["a", "b"], "-") == "a-b")
+assert(upper("abc") == "ABC" and trim("  x ") == "x" and replace("aaa", "a", "b") == "bbb")
+assert(str(42) == "42" and num("3.5") == 3.5 and type([]) == "list")
+assert(str([1, "a", nil]) == "[1, \"a\", nil]")
+
+# the GC keeps up with lots of garbage
+let s = 0
+for k in range(200000) {
+    let t = [k, str(k), {v: k}]
+    s = s + t[2].v
+}
+assert(s == 19999900000)
+
+# try/catch is an expression; runtime errors arrive as message strings
+fn add(a, b) { a + b }   # untyped, so the mistake only shows up at runtime
+let r = try { add(1, "a") } catch e { e }
+assert(starts_with(r, "can't do num + str (to put a value into text"))
+assert(try { 5 } catch { 0 } == 5)
+assert(try { error({code: 42}) } catch e { e.code } == 42)
+fn risky(n) {
+    if n > 2 { error("too big") }
+    n
+}
+let got = []
+for n in range(5) { push(got, try { risky(n) } catch e { e }) }
+assert(got == [0, 1, 2, "too big", "too big"])
+assert(try { try { error("in") } catch e { error(e + "!") } } catch e { e } == "in!")
+assert(try { [1][9] }
+catch e { contains(e, "out of range") })
+fn deep(n) { if n == 0 { error("bottom") } else { deep(n - 1) } }
+assert(try { deep(50) } catch e { e } == "bottom")
+fn keep() {
+    let n = 10
+    try { error("x") } catch { n + 1 }
+}
+assert(keep() == 11)
+
+# string interpolation: "${expr}", escape with \$
+let name = "lumo"
+assert("hi ${name}, ${1 + 2}" == "hi lumo, 3")
+assert("${[1, 2]} ${nil} \${x} {plain} $5" == "[1, 2] nil " + "$" + "{x} {plain} $5" and len("\${x}") == 4)
+assert("${ {a: 1}.a }" == "1")
+assert("a${"b${"c"}"}" == "abc")
+assert("${name |> upper()}!" == "LUMO!")
+
+# blocks with locals work anywhere, even inside call arguments
+assert(str(if true {
+    let y = 5
+    y * 2
+}) == "10")
+let ys = []
+for k in range(5) { push(ys, if k == 3 { break } else { k }) }
+assert(ys == [0, 1, 2])
+
+# modules: each has its own globals; import binds them as a map
+import "testlib/geo.lu"
+let pi = 3   # no clash with geo's pi
+assert(geo.area(1) == 3.14159 and geo.calls() == 1 and geo.pi == 3.14159)
+import "testlib/geo.lu" as g2   # same module, runs only once
+assert(g2.calls() == 1 and g2 == geo)
+assert(geo.shout("hi") == "HI!" and has(geo, "helper") and type(geo) == "map")
+fn local_import() {
+    import "testlib/helper.lu" as h
+    h.up("x")
+}
+assert(local_import() == "X")
+
+# gradual types: annotate what you want checked; the rest stays `any`
+fn area(r: num) -> num { 3.14 * r * r }
+assert(area(2) == 12.56)
+let names: list[str] = ["a", "b"]
+let scores: map[str, num] = {ada: 3}
+scores.bob = 5
+assert(len(names) == 2 and scores.bob == 5)
+fn apply(f: fn(num) -> num, x: num) -> num { f(x) }
+assert(apply(fn(n: num) -> num { n * 10 }, 4) == 40)
+fn fact(n: num) -> num { if n < 2 { 1 } else { n * fact(n - 1) } }
+assert(fact(5) == 120)
+let anything = if true { "text" } else { 1 }   # mixed: any
+assert(try { area(anything) } catch e { e } == "r should be num, got str")
+fn bad_ret(x) -> num { x }
+assert(try { bad_ret("no") } catch e { e } == "return value of bad_ret should be num, got str")
+let later = nil   # nil means: type decided later
+later = 5
+assert(later == 5)
+
+# structs: maps with fixed, typed fields
+struct Point { x: num, y: num }
+let p = Point(1, 2)
+assert(p.x + p.y == 3 and type(p) == "Point" and str(p) == "Point(x: 1, y: 2)")
+p.x = 10
+assert(p == Point(10, 2) and p != {x: 10, y: 2} and keys(p) == ["x", "y"])
+fn norm2(q: Point) -> num { q.x * q.x + q.y * q.y }
+assert(norm2(p) == 104 and (p |> norm2()) == 104)
+struct Node {
+    value
+    next
+}
+let chain = Node(1, Node(2, nil))
+assert(chain.next.value == 2)
+let hidden: any = p
+assert(try { hidden.z = 1 } catch e { e } == "Point has no field 'z'")
+assert(try { hidden.z } catch e { e } == "Point has no field 'z'")
+assert(try { remove(hidden, "x") } catch e { e } == "remove: can't remove fields from Point")
+fn wants_point(q: Point) { q.x }
+let fake: any = {x: 1, y: 2}
+assert(try { wants_point(fake) } catch e { e } == "q should be Point, got map")
+fn local_struct() {
+    struct Pair { a, b }
+    let pr = Pair("l", "r")
+    pr.a + pr.b
+}
+assert(local_struct() == "lr")
+
+# standard library
+fn get_or(v, d) { if v == nil { d } else { v } }
+assert(starts_with("lumo", "lu") and ends_with("lumo", "mo") and not starts_with("lu", "lumo"))
+assert(find("çay saati", "saat") == 4 and find("abc", "z") == -1)
+assert(chars("aç") == ["a", "ç"] and ord("ç") == 231 and chr(231) == "ç" and chr(128512) == "😀")
+assert(repeat("ab", 3) == "ababab" and reverse("aço") == "oça" and reverse([1, 2]) == [2, 1])
+let ins = [1, 3]
+insert(ins, 1, 2)
+assert(ins == [1, 2, 3] and index_of(ins, 3) == 2 and index_of(ins, 9) == -1)
+assert(pow(2, 10) == 1024 and round(sin(pi / 2)) == 1 and log(1) == 0)
+assert(sum([1, 2, 3]) == 6 and any([1, 5], fn(x) { x > 4 }) and not all([1, 5], fn(x) { x > 4 }))
+
+let data = {name: "Ada", tags: ["a", "b"], ok: true, none: nil, n: 1.5, q: "say \"hi\"\n"}
+let text = json_encode(data)
+assert(text == "{\"name\":\"Ada\",\"tags\":[\"a\",\"b\"],\"ok\":true,\"none\":null,\"n\":1.5,\"q\":\"say \\\"hi\\\"\\n\"}")
+assert(json_decode(text) == data)
+assert(json_decode(" [1, {\"a\": \"\\u00e7\\ud83d\\ude00\"}] ") == [1, {a: "ç😀"}])
+assert(json_encode(Point(1, 2)) == "{\"x\":1,\"y\":2}")
+assert(try { json_decode("{bad}") } catch e { contains(e, "invalid JSON at position 1") })
+
+let t0 = now()
+sleep(0.01)
+assert(now() - t0 >= 0.009 and len(format_time(0, "%Y")) == 4)
+
+let tmp = (env("TMPDIR") |> get_or("/tmp")) + "/lumo_test_${floor(now() * 1000)}.txt"
+write_file(tmp, "a")
+append_file(tmp, "b")
+assert(exists(tmp) and read_file(tmp) == "ab" and not exists(tmp + ".nope"))
+assert(contains(list_dir("tests/testlib"), "geo.lu"))
+let ran = run("echo hi; exit 3")
+assert(ran.output == "hi\n" and ran.code == 3)
+run("rm -f '${tmp}'")
+
+# bitwise operators on 32-bit integers, hex and exponent literals
+assert((12 & 10) == 8 and (12 | 10) == 14 and (12 ^ 10) == 6 and ~0 == -1)
+assert(1 << 4 == 16 and 256 >> 4 == 16 and -16 >> 2 == -4 and -1 >>> 28 == 15 and 1 << 31 == -2147483648)
+assert(0xFF == 255 and 0x10 + 1 == 17 and 1e3 == 1000 and 2.5e-1 == 0.25)
+assert((5 + 3 << 1) == 16 and (1 | 2 == 3) and (6 & 3) == 2)
+assert(trunc(-2.7) == -2 and trunc(2.7) == 2)
+
+# binary files
+let bin = (env("TMPDIR") |> get_or("/tmp")) + "/lumo_bytes_${floor(now() * 1000)}.bin"
+write_file(bin, "IWAD")
+let bytes = read_bytes(bin)
+assert(bytes == [73, 87, 65, 68] and bytes_str(bytes, 0, 4) == "IWAD" and bytes_str([65, 0, 66], 0, 3) == "A")
+run("rm -f '${bin}'")
+
+# ranges: a..b includes both ends
+assert(1..5 == [1, 2, 3, 4, 5] and 3..3 == [3] and 5..1 == [] and len(0..-1) == 0)
+let n5 = 5
+assert(1..n5 - 1 == [1, 2, 3, 4] and sum(1..100) == 5050)
+let squares = []
+for i in 1..3 { push(squares, i * i) }
+assert(squares == [1, 4, 9])
+let fl = 1.5
+assert(try { 1..fl } catch e { e } == "ranges need whole numbers")
+
+# run() with a list skips the shell: arguments arrive exactly as given
+let direct = run(["echo", "a; echo b", "$HOME"])
+assert(direct.output == "a; echo b $HOME\n" and direct.code == 0)
+assert(run(["false"]).code == 1 and run(["no-such-program-xyz"]).code == 127)
+
+print("ok")

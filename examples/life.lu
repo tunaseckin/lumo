@@ -1,0 +1,41 @@
+#!/usr/bin/env lumo
+# Conway's Game of Life on a small wrapping grid.
+
+let w = 20
+let h = 10
+
+fn make_grid(f) {
+    map(range(h), fn(y) { map(range(w), fn(x) { f(x, y) }) })
+}
+
+# a glider and a blinker
+let alive = ["1,0", "2,1", "0,2", "1,2", "2,2", "12,4", "13,4", "14,4"]
+let grid = make_grid(fn(x, y) { contains(alive, "${x},${y}") })
+
+fn neighbours(g, x, y) -> num {
+    let n = 0
+    for dy in [-1, 0, 1] {
+        for dx in [-1, 0, 1] {
+            if (dx != 0 or dy != 0) and g[(y + dy) % h][(x + dx) % w] { n = n + 1 }
+        }
+    }
+    n
+}
+
+fn step(g) {
+    make_grid(fn(x, y) {
+        let n = neighbours(g, x, y)
+        n == 3 or (g[y][x] and n == 2)
+    })
+}
+
+fn draw(g, gen: num) {
+    print("generation ${gen}")
+    for row in g { print(join(map(row, fn(c) { if c { "#" } else { "." } }), "")) }
+    print("")
+}
+
+for gen in range(4) {
+    draw(grid, gen)
+    grid = step(grid)
+}

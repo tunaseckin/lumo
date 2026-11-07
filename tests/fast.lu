@@ -1,0 +1,77 @@
+# Runs the same both ways; tests/run.sh checks `lumo` and `lumo --fast` print identical output.
+
+fn fib(n: num) -> num { if n < 2 { n } else { fib(n - 1) + fib(n - 2) } }
+
+fn is_prime(n: num) -> bool {
+    if n < 2 { return false }
+    let d = 2
+    while d * d <= n {
+        if n % d == 0 { return false }
+        d = d + 1
+    }
+    true
+}
+
+fn count_primes(limit: num) -> num {
+    let c = 0
+    for i in 1..limit {
+        if is_prime(i) { c = c + 1 }
+    }
+    c
+}
+
+fn sum_list(xs: list[num]) -> num {
+    let s = 0
+    for x in xs { s = s + x }
+    s
+}
+
+fn bubble(xs: list[num]) -> num {     # sorts in place, returns the number of swaps
+    let swaps = 0
+    let n = len(xs)
+    for i in 0..n - 2 {
+        for j in 0..n - 2 - i {
+            if xs[j] > xs[j + 1] {
+                let t = xs[j]
+                xs[j] = xs[j + 1]
+                xs[j + 1] = t
+                swaps = swaps + 1
+            }
+        }
+    }
+    swaps
+}
+
+fn bits(x: num) -> num { ((x << 3) ^ (x >> 1)) & 0xFFFF | (~x & 7) }
+fn floored(a: num, b: num) -> num { a % b + trunc(a / b) * 0 + floor(-0.5) }
+fn mathy(x: num) -> num { round(sqrt(abs(x)) * 100) / 100 + min(x, 2) + max(x, 3) + pow(2, 3) }
+fn classify(n: num) -> num {
+    let r = if n > 10 { 3 } else if n > 5 { 2 } else { 1 }
+    let loop_var_copy = 0
+    for i in 1..3 { let j = i * 100; loop_var_copy = loop_var_copy + j }
+    r * 1000 + loop_var_copy
+}
+fn early(xs: list[num]) -> num {
+    for i in 0..len(xs) - 1 {
+        if xs[i] < 0 { return i }
+    }
+    -1
+}
+fn divide(a: num, b: num) -> num { a / b }
+fn get(xs: list[num], i: num) -> num { xs[i] }
+fn uses_str(n: num) -> num { len("abc") + n }        # stays interpreted (strings)
+fn calls_interp(n: num) -> num { uses_str(n) * 2 }   # stays interpreted (calls one that is)
+
+print(fib(20), count_primes(500), sum_list([1, 2, 3.5]))
+let data = [5, 3, 9, 1, 7, 2]
+print(bubble(data), data)
+print(bits(12345), bits(-7), floored(-7, 3), mathy(-16), mathy(2.25))
+print(classify(4), classify(7), classify(12), early([3, 1, -2, 5]), early([1]))
+print(calls_interp(1), -get([1, 2, 3], -1))
+print(try { divide(1, 0) } catch e { e })
+print(try { get([1], 5) } catch e { e })
+print(try { get([1], 0.5) } catch e { e })
+let mixed: any = [1, "a"]
+print(try { sum_list(mixed) } catch { "failed" })   # the message depends on where it fails
+let anything: any = "x"
+print(try { fib(anything) } catch e { e })

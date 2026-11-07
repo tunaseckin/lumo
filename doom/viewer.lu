@@ -1,0 +1,91 @@
+#!/usr/bin/env lumo
+# Doom on Lumo, step 1: read a Doom WAD and show its title screen and level maps.
+#   lumo doom/viewer.lu [doom1.wad] [map]
+#   space: title screen <-> map    left / right: previous / next level
+import "wad.lu"
+
+let W = 960
+let H = 600
+
+fn find_wad() -> str {
+    if len(args) > 0 { return args[0] }
+    for p in ["doom1.wad", "doom/doom1.wad"] {
+        if exists(p) { return p }
+    }
+    error("doom1.wad not found; pass its path: lumo doom/viewer.lu path/to/doom1.wad")
+}
+
+let wd = wad.open(find_wad())
+let pal = wad.palette(wd)
+
+let title = map(range(320 * 200), fn(i) { 0 })
+wad.draw_picture(wd, "TITLEPIC", title, 320, 200, 0, 0)
+
+let MAPS = filter(map(range(1, 10), fn(n) { "E1M${n}" }), fn(m) { wad.find(wd, m, 0) >= 0 })
+let current = 0
+let screen = if len(args) > 1 and args[1] == "map" { "map" } else { "title" }
+
+# monsters and the player start get their own colors on the map
+let MONSTERS = [3004, 9, 3001, 3002, 58, 3006, 3005, 3003, 16, 7]
+struct View { lines: list, dots: list, name: str, info: str }
+
+fn build_view(name: str) -> View {
+    let l = wad.level(wd, name)
+    let minx = 1e9
+    let miny = 1e9
+    let maxx = -1e9
+    let maxy = -1e9
+    for w in l.walls {
+        minx = min(minx, min(w.x1, w.x2))
+        maxx = max(maxx, max(w.x1, w.x2))
+        miny = min(miny, min(w.y1, w.y2))
+        maxy = max(maxy, max(w.y1, w.y2))
+    }
+    let scale = min((W - 80) / (maxx - minx), (H - 120) / (maxy - miny))
+    let ox = (W - (maxx - minx) * scale) / 2
+    let oy = 80 + (H - 120 - (maxy - miny) * scale) / 2
+    fn sx(x) { ox + (x - minx) * scale }
+    fn sy(y) { oy + (maxy - y) * scale }   # map y points up, screen y points down
+
+    let lines = []
+    for w in l.walls {
+        let color = if w.secret or not w.two_sided { "#e8553f" } else if w.door { "gold" } else { "#5b6b8c" }
+        push(lines, [sx(w.x1), sy(w.y1), sx(w.x2), sy(w.y2), color])
+    }
+    let dots = []
+    let monsters = 0
+    for t in l.things {
+        if t.type == 1 {
+            push(dots, [sx(t.x), sy(t.y), 7, "lime"])
+        } else if contains(MONSTERS, t.type) {
+            monsters = monsters + 1
+            push(dots, [sx(t.x), sy(t.y), 3, "magenta"])
+        }
+    }
+    View(lines, dots, name, "${len(l.walls)} walls · ${monsters} monsters · ${len(l.things)} things")
+}
+
+let view = build_view(MAPS[current])
+gfx.window(W, H, "Doom on Lumo")
+
+while gfx.frame() {
+    if gfx.pressed("space") or gfx.mouse().clicked { screen = if screen == "title" { "map" } else { "title" } }
+    let step = if gfx.pressed("right") { 1 } else if gfx.pressed("left") { -1 } else { 0 }
+    if step != 0 {
+        current = (current + step + len(MAPS)) % len(MAPS)
+        view = build_view(MAPS[current])
+        screen = "map"
+    }
+
+    if screen == "title" {
+        gfx.pixels(title, 320, 200, pal)
+    } else {
+        gfx.clear("#0b0f1a")
+        for ln in view.lines { gfx.line(ln[0], ln[1], ln[2], ln[3], ln[4], 1.5) }
+        for d in view.dots { gfx.circle(d[0], d[1], d[2], d[3]) }
+        gfx.text(view.name, 30, 24, 30, "white")
+        gfx.text(view.info, 30, 58, 14, "silver")
+        let hint = "← → level · space: title"
+        gfx.text(hint, W - gfx.text_width(hint, 14) - 30, 30, 14, "gray")
+    }
+}

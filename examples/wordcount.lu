@@ -1,0 +1,35 @@
+#!/usr/bin/env lumo
+# Count words in a file and show the most common ones.
+# usage: lumo examples/wordcount.lu README.md
+
+if len(args) == 0 {
+    print("usage: lumo wordcount.lu <file>")
+    exit(1)
+}
+
+let counts: map[str, num] = {}
+for line in split(read_file(args[0]), "\n") {
+    for raw in split(line, " ") {
+        let w = lower(trim(raw))
+        if len(w) > 2 and not contains("#*`|-=()[]{}<>", slice(w, 0, 1)) {
+            counts[w] = get(counts, w, 0) + 1
+        }
+    }
+}
+
+# sort words by count: build "count word" pairs and sort them numerically
+let pairs = []
+for w in counts { push(pairs, [counts[w], w]) }
+fn by_count(xs) {
+    let nums = sort(map(xs, fn(p) { p[0] })) |> reverse()
+    let out = []
+    for n in nums {
+        for p in xs {
+            if p[0] == n and not contains(out, p) { push(out, p) }
+        }
+    }
+    out
+}
+let top = slice(by_count(pairs), 0, 10)
+print("${len(counts)} different words; top ${len(top)}:")
+for p in top { print("  ${p[0]}  ${p[1]}") }
