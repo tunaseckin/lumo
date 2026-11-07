@@ -7,6 +7,11 @@ $repo = "tunaseckin/lumo"
 $home_dir = if ($env:LUMO_HOME) { $env:LUMO_HOME } else { Join-Path $env:LOCALAPPDATA "Lumo" }
 
 $tag = (Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest").tag_name
+$exe = Join-Path $home_dir "lumo.exe"
+if ((Test-Path $exe) -and ((& $exe --version) -eq "lumo $($tag.TrimStart('v'))")) {
+  Write-Host "Lumo $($tag.TrimStart('v')) is already installed and up to date ($home_dir)"
+  return
+}
 Write-Host "Downloading Lumo $tag for Windows..."
 $zip = Join-Path ([IO.Path]::GetTempPath()) "lumo-$tag.zip"
 Invoke-WebRequest "https://github.com/$repo/releases/download/$tag/lumo-$tag-windows-x64.zip" -OutFile $zip

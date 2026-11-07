@@ -41,6 +41,7 @@ jobs:
         run: |
           sh install.sh
           ~/.local/bin/lumo examples/fizzbuzz.lu | head -3
+          sh install.sh | grep -q "already installed and up to date"
       - name: install.ps1
         if: runner.os == 'Windows'
         shell: pwsh
@@ -49,6 +50,8 @@ jobs:
           $p = [Environment]::GetEnvironmentVariable("Path", "User")
           if (($p -split ";") -notcontains "$env:LOCALAPPDATA\Lumo") { throw "not on PATH: $p" }
           & "$env:LOCALAPPDATA\Lumo\lumo.exe" examples/fizzbuzz.lu | Select-Object -First 3
+          $again = ./install.ps1 6>&1 | Out-String
+          if ($again -notmatch "already installed and up to date") { throw "second run: $again" }
 
   windows:
     runs-on: windows-latest

@@ -16,6 +16,13 @@ esac
 
 tag=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
 [ -n "$tag" ] || { echo "error: couldn't find the latest Lumo release (no internet?)"; exit 1; }
+if [ "$("$home/lumo" --version 2>/dev/null)" = "lumo ${tag#v}" ]; then
+  echo "Lumo ${tag#v} is already installed and up to date ($home)"
+  exit 0
+fi
+if [ -e "$bin/lumo" ] && [ "$(readlink "$bin/lumo")" != "$home/lumo" ]; then
+  echo "Note: replacing $bin/lumo (it pointed to $(readlink "$bin/lumo" || echo "another file"))"
+fi
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
