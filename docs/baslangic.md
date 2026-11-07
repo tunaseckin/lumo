@@ -9,10 +9,24 @@ Süre: yaklaşık 20–30 dakika.
 
 ## 0. Hazırlık
 
-Şimdilik Lumo'yu kaynak kodundan kuruyoruz (yakında tek komutla kurulacak).
+### Windows
+
+1. [Releases](https://github.com/tunaseckin/lumo/releases) sayfasından `lumo-...-windows-x64.zip` dosyasını indir.
+2. Dosyaya sağ tıkla, **Tümünü ayıkla** de. Çıkan klasörün adını `lumo` yap ve masaüstüne taşı.
+3. Başlat menüsünden **PowerShell**'i aç ve şunu yapıştır. `lumo` komutunu her yerden çalıştırabilmen için bu bir kerelik gerekiyor:
+
+```powershell
+[Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetFolderPath("Desktop") + "\lumo", "User")
+```
+
+PowerShell'i kapatıp yeniden aç ve `lumo --version` yaz. `lumo 0.2.0` yazmalı. Windows bir uyarı gösterirse **Daha fazla bilgi → Yine de çalıştır** de.
+
+### Mac
+
+Şimdilik Mac'te Lumo'yu kaynak kodundan kuruyoruz.
 Lumo klasörünü masaüstüne koy (GitHub sayfasındaki **Code → Download ZIP** ile indirip açabilirsin; klasörün adı `lumo` olsun).
 
-Mac'te **Terminal** uygulamasını aç. Kurulum bir C derleyicisi ister; daha önce kurmadıysan önce şunu yaz ve açılan pencerede **Yükle** de (birkaç dakika sürer):
+**Terminal** uygulamasını aç. Kurulum bir C derleyicisi ister; daha önce kurmadıysan önce şunu yaz ve açılan pencerede **Yükle** de (birkaç dakika sürer):
 
 ```bash
 xcode-select --install
@@ -31,7 +45,7 @@ Bu, `lumo` komutunu `~/.local/bin` klasörüne koyar. Çalıştığını kontrol
 lumo --version
 ```
 
-`lumo 0.1.0` yazmalı. `command not found` görürsen bu klasörü bir kerelik tanıtman gerekiyor, sonra Terminal'i kapatıp aç:
+`lumo 0.2.0` yazmalı. `command not found` görürsen bu klasörü bir kerelik tanıtman gerekiyor, sonra Terminal'i kapatıp aç:
 
 ```bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
@@ -39,7 +53,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 
 **Editör:** kod yazmak için VS Code kullan. Lumo eklentisini kurarsan kodun renkli görünür ve bir ▶ düğmen olur.
 VS Code'da sol taraftaki **Extensions** (uzantılar) simgesine tıkla, üstteki `···` menüsünden
-**Install from VSIX...** seç ve `lumo/editor/vscode/lumo-lang.vsix` dosyasını seç.
+**Install from VSIX...** seç ve [Releases](https://github.com/tunaseckin/lumo/releases) sayfasından indirdiğin `lumo-lang.vsix` dosyasını seç.
 
 Sonra `File → Open Folder` ile kendine bir klasör aç (örneğin masaüstünde `lumo-dersler`).
 İçinde yeni bir dosya oluştur, adı `.lu` ile bitsin, örneğin `deneme.lu`.
@@ -359,8 +373,8 @@ Oyunu tek bir dosyaya çevir (terminalde oyun dosyanın olduğu klasördeyken):
 lumo build oyunum.lu
 ```
 
-Ortaya çıkan `oyunum` dosyasını bir Mac kullanıcısına gönderebilirsin; onda Lumo kurulu olmasa bile çalışır.
-Bu dosya imzalı olmadığı için macOS ilk açılışta uyarı verebilir; o zaman dosyaya sağ tıklayıp **Aç** demek gerekir.
+Ortaya çıkan dosyayı (Windows'ta `oyunum.exe`, Mac'te `oyunum`) aynı sistemi kullanan birine gönderebilirsin; onda Lumo kurulu olmasa bile çalışır.
+Bu dosya imzalı olmadığı için ilk açılışta uyarı çıkabilir: Windows'ta **Daha fazla bilgi → Yine de çalıştır**, Mac'te dosyaya sağ tıklayıp **Aç** de.
 
 ---
 

@@ -4,5 +4,5 @@
 *.vsix
 *.wad
 lumo_src.h
-/tests/_snippet.lu
+/tests/_*
 *.res

@@ -61,7 +61,7 @@ jobs:
           mkdir "$dir"
           cp lumo.exe README.md LICENSE "$dir"/
           cp -r examples docs "$dir"/
-          zip -qr "$dir.zip" "$dir"
+          (cd "$dir" && zip -qr "../$dir.zip" .)   # files at the top: Explorer's "Extract All" adds the folder
       - uses: softprops/action-gh-release@v2
         with:
           files: lumo-*.zip

@@ -218,14 +218,18 @@ let t0 = now()
 sleep(0.01)
 assert(now() - t0 >= 0.009 and len(format_time(0, "%Y")) == 4)
 
-let tmp = (env("TMPDIR") |> get_or("/tmp")) + "/lumo_test_${floor(now() * 1000)}.txt"
+# scratch files live in tests/ (run.sh runs from the repo root); Windows has cmd, not sh
+let windows = env("OS") == "Windows_NT"
+fn delete(path) { if windows { run(["cmd", "/c", "del", replace(path, "/", "\\")]) } else { run(["rm", "-f", path]) } }
+let tmp = "tests/_tmp_${floor(now() * 1000)}.txt"
 write_file(tmp, "a")
 append_file(tmp, "b")
 assert(exists(tmp) and read_file(tmp) == "ab" and not exists(tmp + ".nope"))
 assert(contains(list_dir("tests/testlib"), "geo.lu"))
-let ran = run("echo hi; exit 3")
+let ran = if windows { run("echo hi& exit 3") } else { run("echo hi; exit 3") }
 assert(ran.output == "hi\n" and ran.code == 3)
-run("rm -f '${tmp}'")
+delete(tmp)
+assert(not exists(tmp))
 
 # bitwise operators on 32-bit integers, hex and exponent literals
 assert((12 & 10) == 8 and (12 | 10) == 14 and (12 ^ 10) == 6 and ~0 == -1)
@@ -235,11 +239,11 @@ assert((5 + 3 << 1) == 16 and (1 | 2 == 3) and (6 & 3) == 2)
 assert(trunc(-2.7) == -2 and trunc(2.7) == 2)
 
 # binary files
-let bin = (env("TMPDIR") |> get_or("/tmp")) + "/lumo_bytes_${floor(now() * 1000)}.bin"
+let bin = "tests/_bytes_${floor(now() * 1000)}.bin"
 write_file(bin, "IWAD")
 let bytes = read_bytes(bin)
 assert(bytes == [73, 87, 65, 68] and bytes_str(bytes, 0, 4) == "IWAD" and bytes_str([65, 0, 66], 0, 3) == "A")
-run("rm -f '${bin}'")
+delete(bin)
 
 # ranges: a..b includes both ends
 assert(1..5 == [1, 2, 3, 4, 5] and 3..3 == [3] and 5..1 == [] and len(0..-1) == 0)

@@ -9,10 +9,24 @@ Time: about 20–30 minutes. (Türkçe: [baslangic.md](baslangic.md))
 
 ## 0. Setup
 
-For now Lumo is installed from source (a one-line install is coming).
+### Windows
+
+1. Download `lumo-...-windows-x64.zip` from the [Releases](https://github.com/tunaseckin/lumo/releases) page.
+2. Right-click it and choose **Extract All**. Rename the extracted folder to `lumo` and move it to your Desktop.
+3. Open **PowerShell** from the Start menu and paste this. It's needed once, so the `lumo` command works everywhere:
+
+```powershell
+[Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetFolderPath("Desktop") + "\lumo", "User")
+```
+
+Close and reopen PowerShell, then type `lumo --version`. It should print `lumo 0.2.0`. If Windows shows a warning, choose **More info → Run anyway**.
+
+### Mac
+
+On a Mac, Lumo is installed from source for now.
 Put the Lumo folder on your Desktop (on the GitHub page, **Code → Download ZIP**, then unzip it; name the folder `lumo`).
 
-Open the **Terminal** app on your Mac. Installing needs a C compiler; if you've never installed one, run this first and click **Install** in the window that opens (it takes a few minutes):
+Open the **Terminal** app. Installing needs a C compiler; if you've never installed one, run this first and click **Install** in the window that opens (it takes a few minutes):
 
 ```bash
 xcode-select --install
@@ -31,7 +45,7 @@ That puts the `lumo` command in `~/.local/bin`. Check that it works:
 lumo --version
 ```
 
-It should print `lumo 0.1.0`. If you see `command not found`, tell your shell about that folder once, then close and reopen Terminal:
+It should print `lumo 0.2.0`. If you see `command not found`, tell your shell about that folder once, then close and reopen Terminal:
 
 ```bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
@@ -39,7 +53,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 
 **Editor:** use VS Code to write code. With the Lumo extension, your code is colored and you get a ▶ button.
 In VS Code click the **Extensions** icon on the left, open the `···` menu at the top, choose **Install from VSIX...**
-and pick `lumo/editor/vscode/lumo-lang.vsix`.
+and pick `lumo-lang.vsix`, downloaded from the [Releases](https://github.com/tunaseckin/lumo/releases) page.
 
 Then use `File → Open Folder` to open a folder of your own (for example `lumo-lessons` on your Desktop).
 Create a new file in it whose name ends in `.lu`, such as `hello.lu`.
@@ -357,8 +371,8 @@ Turn your game into a single file (run this in a terminal in the folder with you
 lumo build mygame.lu
 ```
 
-You can send the resulting `mygame` file to someone with a Mac; it runs even without Lumo installed.
-It isn't code-signed, so macOS may warn the first time; right-click the file and choose **Open**.
+You can send the resulting file (`mygame.exe` on Windows, `mygame` on a Mac) to someone on the same system; it runs even without Lumo installed.
+It isn't code-signed, so there may be a warning the first time: on Windows choose **More info → Run anyway**, on a Mac right-click the file and choose **Open**.
 
 ---
 
