@@ -141,6 +141,15 @@ x += "a"' "can't do num + str"
 check 'let x = 1
 x++' 'Lumo has no ++: write x += 1'
 check 'print(2 ** 3)' 'use pow(a, b)'
+check 'print "hi"' 'put parentheses around it: print(...)'
+check 'let xs = [1]
+print(2 in xs)' "use contains(xs, x)"
+check 'let xs = [1]
+if 2 not in xs { }' "use not contains(xs, x)"
+check 'import math' 'math like sqrt and floor is built in'
+check 'class A { }' 'Lumo has no classes'
+check 'print("{}".format(1))' 'write "...${x}..."'
+check 'print(random(1, 6))' 'floor(random() * 6) + 1'
 check 'print(7 // 2)' 'floor(a / b)'
 check 'let n = 1
 print(f"{n}")' 'Lumo has no f-strings'

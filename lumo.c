@@ -47,7 +47,7 @@ static char *win_mkdtemp(char *tpl) { return _mktemp(tpl) && _mkdir(tpl) == 0 ? 
 #include <mach-o/dyld.h>
 #endif
 
-#define LUMO_VERSION "0.2.0"
+#define LUMO_VERSION "0.2.1"
 
 #ifdef LUMO_HAVE_SRC /* `make` embeds lumo's own source, so `lumo build --fast` can recompile it */
 #include "lumo_src.h"
@@ -558,6 +558,7 @@ static const char *method_hint(const char *name, int len) {
       {"indexOf", "index_of(xs, x)"}, {"contains", "contains(x, item)"}, {"sort", "sort(xs)"},
       {"reverse", "reverse(xs)"}, {"keys", "keys(m)"}, {"slice", "slice(x, a, b)"}, {"map", "map(xs, f)"},
       {"filter", "filter(xs, f)"}, {"remove", "remove(m, key)"}, {"get", "get(m, key, default)"},
+      {"format", "\"...${x}...\""},
   };
   for (int i = 0; i < (int)(sizeof hints / sizeof *hints); i++)
     if ((int)strlen(hints[i][0]) == len && !memcmp(hints[i][0], name, len)) return hints[i][1];
@@ -578,7 +579,7 @@ static const char *foreign_hint(const char *name, int len) {
       {"self", "Lumo has no methods; pass the value as a parameter"}, {"this", "Lumo has no methods; pass the value as a parameter"},
       {"switch", "use if / else if"}, {"foreach", "use: for x in xs { ... }"}, {"elseif", "use 'else if'"},
       {"pass", "an empty block {} needs nothing inside"}, {"lambda", "write fn(x) { ... }"}, {"is", "use == to compare"},
-      {"except", "use catch"}, {"nil?", "use == nil"},
+      {"except", "use catch"}, {"class", "Lumo has no classes: use struct Name { field: type } and functions"}, {"nil?", "use == nil"},
   };
   static char out[96];
   for (int i = 0; i < (int)(sizeof hints / sizeof *hints); i++)
@@ -1254,6 +1255,15 @@ static Tok *expect(TT t, const char *what) {
     char d[64];
     describe(peek(), d, sizeof d);
     const char *hint = peek()->type == T_NAME ? foreign_hint(peek()->start, peek()->len) : NULL;
+    static char h[160];
+    Tok *prev = ti > 0 ? &toks[ti - 1] : NULL;
+    if (!strcmp(what, "a file path string") && at(T_NAME))
+      hint = " (math like sqrt and floor is built in; import loads your own files: import \"file.lu\")";
+    else if (!hint && !strcmp(what, "end of statement") && prev && prev->type == T_NAME &&
+             (at(T_STR) || at(T_NUM) || at(T_ISTR))) {
+      snprintf(h, sizeof h, " (to call %.*s, put parentheses around it: %.*s(...))", prev->len, prev->start, prev->len, prev->start);
+      hint = h;
+    }
     compile_error(peek()->line, "expected %s, got %s%s", what, d, hint ? hint : "");
   }
   return advance();
@@ -1632,7 +1642,9 @@ static Type *check_call(Type *f, Type **args, int argc, int line) {
   if (f->k != TY_FN) compile_error(line, "%s is not a function", tys(f));
   const char *name = f->name ? f->name : "fn";
   if (f->nparams >= 0) {
-    if (argc != f->nparams) compile_error(line, "%s takes %d args, got %d", name, f->nparams, argc);
+    if (argc != f->nparams)
+      compile_error(line, "%s takes %d args, got %d%s", name, f->nparams, argc,
+                    !strcmp(name, "random") ? " (random() gives a number from 0 to 1; a dice roll is floor(random() * 6) + 1)" : "");
     for (int i = 0; i < argc; i++)
       if (!compat(f->params[i], args[i])) {
         const char *h = f->params[i]->k == TY_STR && args[i]->k == TY_NUM ? " (str(x) turns a number into text)"
@@ -1910,6 +1922,8 @@ static Type *parse_prec(int prec) {
   bool can_assign = prec <= P_ASSIGN;
   Type *t = prefix(advance(), can_assign);
   while (prec <= infix_prec(peek()->type)) t = infix(advance(), can_assign, t);
+  if ((at(T_NOT) && toks[ti + 1].type == T_IN) || (at(T_IN) && prec <= P_CMP))
+    compile_error(peek()->line, "Lumo has no '%sin' operator: use %scontains(xs, x)", at(T_NOT) ? "not " : "", at(T_NOT) ? "not " : "");
   if (can_assign && (at(T_ASSIGN) || at(T_OPASSIGN))) compile_error(peek()->line, "can't assign to that");
   return t;
 }
