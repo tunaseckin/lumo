@@ -9,47 +9,27 @@ Time: about 20–30 minutes. (Türkçe: [baslangic.md](baslangic.md))
 
 ## 0. Setup
 
-### Windows
+Lumo installs with one command.
 
-1. Download `lumo-...-windows-x64.zip` from the [Releases](https://github.com/tunaseckin/lumo/releases) page.
-2. Right-click it and choose **Extract All**. Rename the extracted folder to `lumo` and move it to your Desktop.
-3. Open **PowerShell** from the Start menu and paste this. It's needed once, so the `lumo` command works everywhere:
+**Windows:** open **PowerShell** from the Start menu, paste this and press Enter:
 
 ```powershell
-[Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";" + [Environment]::GetFolderPath("Desktop") + "\lumo", "User")
+irm https://raw.githubusercontent.com/tunaseckin/lumo/main/install.ps1 | iex
 ```
 
-Close and reopen PowerShell, then type `lumo --version`. It should print `lumo 0.2.0`. If Windows shows a warning, choose **More info → Run anyway**.
-
-### Mac
-
-On a Mac, Lumo is installed from source for now.
-Put the Lumo folder on your Desktop (on the GitHub page, **Code → Download ZIP**, then unzip it; name the folder `lumo`).
-
-Open the **Terminal** app. Installing needs a C compiler; if you've never installed one, run this first and click **Install** in the window that opens (it takes a few minutes):
+**Mac and Linux:** open **Terminal**, paste this and press Enter:
 
 ```bash
-xcode-select --install
+curl -fsSL https://raw.githubusercontent.com/tunaseckin/lumo/main/install.sh | sh
 ```
 
-Then run:
-
-```bash
-cd ~/Desktop/lumo
-make install PREFIX=~/.local
-```
-
-That puts the `lumo` command in `~/.local/bin`. Check that it works:
+When it's done, close and reopen the terminal and type:
 
 ```bash
 lumo --version
 ```
 
-It should print `lumo 0.2.0`. If you see `command not found`, tell your shell about that folder once, then close and reopen Terminal:
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-```
+It should print `lumo 0.2.0` (or newer). The example programs and this guide are installed too: in `%LOCALAPPDATA%\Lumo` on Windows, `~/.lumo` on Mac and Linux.
 
 **Editor:** use VS Code to write code. With the Lumo extension, your code is colored and you get a ▶ button.
 In VS Code click the **Extensions** icon on the left, open the `···` menu at the top, choose **Install from VSIX...**

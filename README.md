@@ -32,7 +32,19 @@ print(json_encode(todos))             # [{"text":"write docs","done":false},...]
 
 ## Get started
 
-**Download:** [Releases](https://github.com/tunaseckin/lumo/releases) has ready-made builds for Windows, macOS (Apple Silicon) and Linux, plus `lumo-lang.vsix` for VS Code. Or build it yourself (needs a C compiler; on Windows, MSYS2 with `mingw-w64-ucrt-x86_64-gcc`):
+**Install** (macOS on Apple Silicon, Linux x64; elsewhere it builds from source):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tunaseckin/lumo/main/install.sh | sh
+```
+
+**Windows** (in PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/tunaseckin/lumo/main/install.ps1 | iex
+```
+
+Or download a build from [Releases](https://github.com/tunaseckin/lumo/releases) (it also has `lumo-lang.vsix` for VS Code), or build it yourself (needs a C compiler; on Windows, MSYS2 with `mingw-w64-ucrt-x86_64-gcc`):
 
 ```bash
 make                         # build ./lumo (needs a C compiler)
