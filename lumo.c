@@ -4415,7 +4415,12 @@ static bool n_append_file(int argc, Value *args, Value *out) {
 static bool win_start(const char *dir, char *const argv[], HANDLE out, PROCESS_INFORMATION *pi) {
   Buf cmd = {0};
   for (int i = 0; argv[i]; i++) {
-    buf_add(&cmd, i ? " \"" : "\"", i ? 2 : 1);
+    if (i) buf_add(&cmd, " ", 1);
+    if (*argv[i] && !strpbrk(argv[i], " \t\"")) { /* plain words stay unquoted: cmd /c mangles quotes */
+      buf_add(&cmd, argv[i], (int)strlen(argv[i]));
+      continue;
+    }
+    buf_add(&cmd, "\"", 1);
     for (const char *p = argv[i];; p++) {
       int slashes = 0;
       while (*p == '\\') slashes++, p++;
