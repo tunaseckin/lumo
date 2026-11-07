@@ -372,7 +372,7 @@ Here `score` was typed as `scroe`, and Lumo guesses what you meant.
 | There | In Lumo |
 |---|---|
 | `x = 5` (first time) | `let x = 5` |
-| `x += 1`, `x++` | `x = x + 1` |
+| `x++` | `x += 1` |
 | `if x:` + indentation | `if x { ... }` |
 | `elif` | `else if` |
 | `True`, `None`, `null` | `true`, `nil` |

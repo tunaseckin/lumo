@@ -376,7 +376,7 @@ Hata mesajları şimdilik İngilizce. Birkaç sık kelime: *not defined* = tanı
 | Orada | Lumo'da |
 |---|---|
 | `x = 5` (ilk kez) | `let x = 5` |
-| `x += 1`, `x++` | `x = x + 1` |
+| `x++` | `x += 1` |
 | `if x:` + girinti | `if x { ... }` |
 | `elif` | `else if` |
 | `True`, `None`, `null` | `true`, `nil` |

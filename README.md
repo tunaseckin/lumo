@@ -152,7 +152,7 @@ These are small numeric benchmarks, which is exactly the kind of code `--fast` h
 
 ```
 let x = 5                       # num (64-bit float), str, bool, nil, list, map, fn
-x = x + 1
+x = x + 1                       # or x += 1 (also -=, *=, /=, %=)
 let xs = [1, 2, 3]
 let m = {name: "lumo", "k": 1}  # m.name == m["name"]
 

@@ -783,7 +783,7 @@ typedef enum {
   T_LET, T_FN, T_IF, T_ELSE, T_WHILE, T_FOR, T_IN, T_RETURN, T_BREAK, T_CONTINUE,
   T_TRUE, T_FALSE, T_NIL, T_AND, T_OR, T_NOT, T_IMPORT, T_TRY, T_CATCH,
   T_PLUS, T_MINUS, T_STAR, T_SLASH, T_PERCENT,
-  T_EQ, T_NE, T_LT, T_LE, T_GT, T_GE, T_ASSIGN, T_PIPE, T_ARROW,
+  T_EQ, T_NE, T_LT, T_LE, T_GT, T_GE, T_ASSIGN, T_OPASSIGN /* += -= *= /= %= */, T_PIPE, T_ARROW,
   T_BAND, T_BOR, T_BXOR, T_BNOT, T_SHL, T_SHR, T_USHR, T_DOTDOT,
   T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE, T_LBRACKET, T_RBRACKET,
   T_COMMA, T_SEMI, T_COLON, T_DOT, T_EOF
@@ -906,8 +906,8 @@ static void scan(const char *src) {
     if (c == '{') brace_depth++;
     if (c == '}') brace_depth--;
     if (c == '&' && p[1] == '&') compile_error(line, "unexpected '&&' (use 'and')");
-    if (strchr("+-*/%", c) && p[1] == '=') compile_error(line, "Lumo has no %c=: write x = x %c 1", c, c);
-    if ((c == '+' || c == '-') && p[1] == c) compile_error(line, "Lumo has no %c%c: write x = x %c 1", c, c, c);
+    if (strchr("+-*/%", c) && p[1] == '=') { add_tok(T_OPASSIGN, s, 2, line); p += 2; continue; }
+    if ((c == '+' || c == '-') && p[1] == c) compile_error(line, "Lumo has no %c%c: write x %c= 1", c, c, c);
     if (c == '*' && p[1] == '*') compile_error(line, "Lumo has no **: use pow(a, b)");
     if (c == '|' && p[1] == '|') compile_error(line, "unexpected '||' (use 'or')");
     if (c == '>' && p[1] == '>' && p[2] == '>') { add_tok(T_USHR, s, 3, line); p += 3; continue; }
@@ -1177,7 +1177,7 @@ static bool declared_in_main(const char *name) { /* the main program has a let f
 /* ---------- compiler ---------- */
 
 typedef enum {
-  OP_CONST, OP_NIL, OP_TRUE, OP_FALSE, OP_POP, OP_POPN, OP_ENDSCOPE, OP_SWAP,
+  OP_CONST, OP_NIL, OP_TRUE, OP_FALSE, OP_POP, OP_POPN, OP_ENDSCOPE, OP_SWAP, OP_DUP2,
   OP_GET_LOCAL, OP_SET_LOCAL, OP_GET_UP, OP_SET_UP, OP_GET_GLOBAL, OP_SET_GLOBAL, OP_DEF_GLOBAL,
   OP_GET_INDEX, OP_SET_INDEX,
   OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_MOD, OP_NEG, OP_NOT,
@@ -1192,7 +1192,7 @@ typedef enum {
 static const int8_t EFFECT[OP_COUNT] = {
     [OP_CONST] = 1, [OP_NIL] = 1, [OP_TRUE] = 1, [OP_FALSE] = 1, [OP_POP] = -1,
     [OP_GET_LOCAL] = 1, [OP_GET_UP] = 1, [OP_GET_GLOBAL] = 1, [OP_DEF_GLOBAL] = -1,
-    [OP_GET_INDEX] = -1, [OP_SET_INDEX] = -2,
+    [OP_DUP2] = 2, [OP_GET_INDEX] = -1, [OP_SET_INDEX] = -2,
     [OP_ADD] = -1, [OP_SUB] = -1, [OP_MUL] = -1, [OP_DIV] = -1, [OP_MOD] = -1,
     [OP_EQ] = -1, [OP_NE] = -1, [OP_LT] = -1, [OP_LE] = -1, [OP_GT] = -1, [OP_GE] = -1,
     [OP_JUMP_FALSE] = -1, [OP_AND] = -1, [OP_OR] = -1,
@@ -1497,7 +1497,7 @@ static bool declared_in_file(Tok *t) {
 
 static void undefined_name(Tok *t) {
   const char *hint = foreign_hint(t->start, t->len);
-  if (!hint && toks[ti].type == T_ASSIGN) /* `yaş = 15` before any let */
+  if (!hint && (toks[ti].type == T_ASSIGN || toks[ti].type == T_OPASSIGN)) /* `yaş = 15` before any let */
     compile_error(t->line, "'%.*s' doesn't exist yet; to create it write: let %.*s = ...", t->len, t->start, t->len, t->start);
   if (!hint) {
     Suggest s;
@@ -1517,6 +1517,29 @@ static void undefined_name(Tok *t) {
   compile_error(t->line, "'%.*s' is not defined%s", t->len, t->start, hint);
 }
 
+static const int BINOPS[] = {[T_PLUS] = OP_ADD, [T_MINUS] = OP_SUB, [T_STAR] = OP_MUL, [T_SLASH] = OP_DIV,
+                             [T_PERCENT] = OP_MOD, [T_EQ] = OP_EQ, [T_NE] = OP_NE, [T_LT] = OP_LT,
+                             [T_LE] = OP_LE, [T_GT] = OP_GT, [T_GE] = OP_GE, [T_BAND] = OP_BAND,
+                             [T_BOR] = OP_BOR, [T_BXOR] = OP_BXOR, [T_SHL] = OP_SHL, [T_SHR] = OP_SHR,
+                             [T_USHR] = OP_USHR};
+
+/* the operator of a += -= *= /= %= token */
+static TT opassign_op(Tok *t) {
+  return t->start[0] == '+' ? T_PLUS : t->start[0] == '-' ? T_MINUS : t->start[0] == '*' ? T_STAR
+       : t->start[0] == '/' ? T_SLASH : T_PERCENT;
+}
+
+static Type *arith(TT tt, Type *l, Type *r, int line);
+
+/* the value of `= v` or `op= v`; for op= the current value (cur) is already on the stack */
+static Type *assigned_value(Tok *opt, Type *cur, int line) {
+  TT tt = opt->type == T_ASSIGN ? T_ASSIGN : opassign_op(opt);
+  Type *v = expression();
+  if (tt == T_ASSIGN) return v;
+  op(BINOPS[tt]);
+  return arith(tt, cur, v, line);
+}
+
 static Type *named_var(Tok *t, bool can_assign) {
   int arg, get, set;
   bool wide = false, checked;
@@ -1533,13 +1556,18 @@ static Type *named_var(Tok *t, bool can_assign) {
     wide = true;
   }
   int o = get;
-  if (can_assign && match(T_ASSIGN)) {
+  if (can_assign && (at(T_ASSIGN) || at(T_OPASSIGN))) {
+    Tok *opt = advance();
     int line = cur_line;
     int li = get == OP_GET_LOCAL ? find_local(C, t) : -1;
     if (li >= 0 && C->locals[li].loop_var)
       compile_error(line, "'%.*s' is the loop variable; changing it doesn't change the list. "
                           "To change the list, loop over positions: for i in 0..len(xs) - 1 { xs[i] = ... }", t->len, t->start);
-    Type *v = expression();
+    if (opt->type == T_OPASSIGN) {
+      op(get);
+      if (wide) emit16(arg); else emit(arg);
+    }
+    Type *v = assigned_value(opt, ty, line);
     if (checked && !compat(ty, v))
       compile_error(line, "'%.*s' is %s, can't assign %s", t->len, t->start, tys(ty), tys(v));
     o = set;
@@ -1750,8 +1778,10 @@ static Type *index_tail(bool can_assign, Type *obj, Type *key, Tok *field, int l
     } else if (!compat(TSTR, key)) {
       compile_error(line, "%s fields are named by str, got %s", obj->name, tys(key));
     }
-    if (can_assign && match(T_ASSIGN)) {
-      Type *v = expression();
+    if (can_assign && (at(T_ASSIGN) || at(T_OPASSIGN))) {
+      Tok *opt = advance();
+      if (opt->type == T_OPASSIGN) { op(OP_DUP2); op(OP_GET_INDEX); }
+      Type *v = assigned_value(opt, item, line);
       if (!compat(item, v)) {
         if (field) compile_error(line, "%s.%.*s is %s, can't assign %s", obj->name, field->len, field->start, tys(item), tys(v));
         compile_error(line, "can't assign %s to a field of %s", tys(v), obj->name);
@@ -1776,8 +1806,10 @@ static Type *index_tail(bool can_assign, Type *obj, Type *key, Tok *field, int l
   } else if (known(obj) && obj->k != TY_STR) {
     compile_error(line, "can't index %s", tys(obj));
   }
-  if (can_assign && match(T_ASSIGN)) {
-    Type *v = expression();
+  if (can_assign && (at(T_ASSIGN) || at(T_OPASSIGN))) {
+    Tok *opt = advance();
+    if (opt->type == T_OPASSIGN) { op(OP_DUP2); op(OP_GET_INDEX); }
+    Type *v = assigned_value(opt, item, line);
     if (!compat(item, v)) compile_error(line, "%s holds %s, can't put %s in it", tys(obj), tys(item), tys(v));
     op(OP_SET_INDEX);
     return v;
@@ -1867,13 +1899,8 @@ static Type *infix(Tok *t, bool can_assign, Type *left) {
       return index_tail(can_assign, left, TSTR, f, t->line);
     }
     default: {
-      static const int ops[] = {[T_PLUS] = OP_ADD, [T_MINUS] = OP_SUB, [T_STAR] = OP_MUL, [T_SLASH] = OP_DIV,
-                                [T_PERCENT] = OP_MOD, [T_EQ] = OP_EQ, [T_NE] = OP_NE, [T_LT] = OP_LT,
-                                [T_LE] = OP_LE, [T_GT] = OP_GT, [T_GE] = OP_GE, [T_BAND] = OP_BAND,
-                                [T_BOR] = OP_BOR, [T_BXOR] = OP_BXOR, [T_SHL] = OP_SHL, [T_SHR] = OP_SHR,
-                                [T_USHR] = OP_USHR};
       Type *right = parse_prec(infix_prec(t->type) + 1);
-      op(ops[t->type]);
+      op(BINOPS[t->type]);
       return arith(t->type, left, right, t->line);
     }
   }
@@ -1883,7 +1910,7 @@ static Type *parse_prec(int prec) {
   bool can_assign = prec <= P_ASSIGN;
   Type *t = prefix(advance(), can_assign);
   while (prec <= infix_prec(peek()->type)) t = infix(advance(), can_assign, t);
-  if (can_assign && at(T_ASSIGN)) compile_error(peek()->line, "can't assign to that");
+  if (can_assign && (at(T_ASSIGN) || at(T_OPASSIGN))) compile_error(peek()->line, "can't assign to that");
   return t;
 }
 
@@ -2718,12 +2745,33 @@ static bool cg_stmt(Buf *b, CTy *ty) {
     bputs(b, "; } }\n");
     return false;
   }
-  if (at(T_NAME) && toks[ti + 1].type == T_ASSIGN) {
+  if (at(T_NAME) && (toks[ti + 1].type == T_ASSIGN || toks[ti + 1].type == T_OPASSIGN)) {
     Tok *n = advance();
-    advance();
+    Tok *opt = advance();
     int i = cg_find(n);
     if (i < 0) cg_fail("changes '%.*s' from outside the function", n->len, n->start);
-    if (cg_expr(&e) != cvars[i].ty) cg_fail("changes the type of '%.*s'", n->len, n->start);
+    CTy et = cg_expr(&e);
+    if (opt->type == T_OPASSIGN) { /* x op= e  as  x = x op (e) */
+      if (cvars[i].ty != CT_NUM || et != CT_NUM) cg_fail("does %.*s on something that isn't a num", opt->len, opt->start);
+      char c = opt->start[0];
+      bputs(b, c == '/' || c == '%' ? "{ double _b = " : "");
+      if (c == '/' || c == '%') {
+        bbuf(b, &e);
+        bputs(b, "; if (_b == 0) { nerr(\"division by zero\"); LCRT_FAIL(); } ");
+      }
+      cg_var(b, n->start, n->len);
+      bputs(b, " = ");
+      if (c == '%') bputs(b, "lcrt_mod(");
+      cg_var(b, n->start, n->len);
+      if (c == '/' || c == '%') bputs(b, c == '/' ? " / _b; }\n" : ", _b); }\n");
+      else {
+        buf_add(b, (char[]){' ', c, ' ', '('}, 4);
+        bbuf(b, &e);
+        bputs(b, ");\n");
+      }
+      return false;
+    }
+    if (et != cvars[i].ty) cg_fail("changes the type of '%.*s'", n->len, n->start);
     cg_var(b, n->start, n->len);
     bputs(b, " = ");
     bbuf(b, &e);
@@ -2736,6 +2784,7 @@ static bool cg_stmt(Buf *b, CTy *ty) {
       if (toks[j].type == T_LBRACKET) depth++;
       if (toks[j].type == T_RBRACKET && --depth == 0) break;
     }
+    if (j + 1 < ntoks && toks[j + 1].type == T_OPASSIGN) cg_fail("uses %.*s on a list item", toks[j + 1].len, toks[j + 1].start);
     if (j + 1 < ntoks && toks[j + 1].type == T_ASSIGN) {
       Tok *n = advance();
       int i = cg_find(n);
@@ -3217,6 +3266,10 @@ static bool run(int base) {
         vm.sp[-2] = a;
         break;
       }
+      case OP_DUP2: /* obj, key -> obj, key, obj, key (for xs[i] += v) */
+        push(vm.sp[-2]);
+        push(vm.sp[-2]);
+        break;
       case OP_GET_LOCAL: push(f->slots[RB()]); break;
       case OP_SET_LOCAL: f->slots[RB()] = peekv(0); break;
       case OP_GET_UP: push(*f->cl->up[RB()]->loc); break;

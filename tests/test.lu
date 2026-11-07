@@ -255,6 +255,29 @@ assert(squares == [1, 4, 9])
 let fl = 1.5
 assert(try { 1..fl } catch e { e } == "ranges need whole numbers")
 
+# x += v and friends, on variables, list items, map entries, struct fields and captured variables
+let ca = 5
+ca += 2
+ca -= 1
+ca *= 10
+ca /= 4
+ca %= 7
+assert(ca == 1)
+let cs = "a"
+cs += "b"
+let cl = [1, 2, 3]
+cl[1] += 40
+let cm = {"a": 1}
+cm["a"] *= 3
+cm.a -= 1
+assert(cs == "ab" and cl == [1, 42, 3] and cm.a == 2)
+struct CP { x: num, y: num }
+let cp = CP(1, 2)
+cp.x += 9
+let bump = fn() { ca += 1 }
+bump()
+assert(cp.x == 10 and ca == 2)
+
 # run() with a list skips the shell: arguments arrive exactly as given
 let direct = run(["echo", "a; echo b", "$HOME"])
 assert(direct.output == "a; echo b $HOME\n" and direct.code == 0)

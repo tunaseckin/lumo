@@ -137,9 +137,9 @@ print(yildiz_x)' "(did you mean 'yıldız_x'?)"
 check 'let Skor = 1
 print(skor)' "(did you mean 'Skor'?)"
 check 'let x = 1
-x += 1' 'Lumo has no +=: write x = x + 1'
+x += "a"' "can't do num + str"
 check 'let x = 1
-x++' 'Lumo has no ++'
+x++' 'Lumo has no ++: write x += 1'
 check 'print(2 ** 3)' 'use pow(a, b)'
 check 'print(7 // 2)' 'floor(a / b)'
 check 'let n = 1
@@ -224,6 +224,7 @@ tmp="${TMPDIR:-/tmp}/lumo_fast_test_$$"
 mkdir -p "$tmp"
 ./lumo tests/fast.lu > "$tmp/slow.txt" 2>&1
 ./lumo build --fast tests/fast.lu -o "$tmp/fast" > "$tmp/build.txt" || { echo "FAIL: build --fast"; cat "$tmp/build.txt"; exit 1; }
+grep -q "native:      compound" "$tmp/build.txt" || { echo "FAIL: compound wasn't compiled"; cat "$tmp/build.txt"; exit 1; }
 grep -q "native:      fib" "$tmp/build.txt" || { echo "FAIL: fib wasn't compiled"; cat "$tmp/build.txt"; exit 1; }
 grep -q "interpreted: calls_interp (it calls uses_str)" "$tmp/build.txt" || { echo "FAIL: fallback report"; cat "$tmp/build.txt"; exit 1; }
 "$tmp/fast" > "$tmp/fast.txt" 2>&1

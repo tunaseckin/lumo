@@ -60,6 +60,16 @@ fn early(xs: list[num]) -> num {
 fn divide(a: num, b: num) -> num { a / b }
 fn get(xs: list[num], i: num) -> num { xs[i] }
 fn uses_str(n: num) -> num { len("abc") + n }        # stays interpreted (strings)
+fn compound(n: num) -> num {   # x += ... and friends
+    let x = n
+    x += 7
+    x -= 2
+    x *= 3
+    x /= 2
+    x %= 10
+    x
+}
+
 fn calls_interp(n: num) -> num { uses_str(n) * 2 }   # stays interpreted (calls one that is)
 
 print(fib(20), count_primes(500), sum_list([1, 2, 3.5]))
@@ -67,6 +77,7 @@ let data = [5, 3, 9, 1, 7, 2]
 print(bubble(data), data)
 print(bits(12345), bits(-7), floored(-7, 3), mathy(-16), mathy(2.25))
 print(classify(4), classify(7), classify(12), early([3, 1, -2, 5]), early([1]))
+print(compound(4), compound(-3), try { compound(0) / 0 } catch e { e })
 print(calls_interp(1), -get([1, 2, 3], -1))
 print(try { divide(1, 0) } catch e { e })
 print(try { get([1], 5) } catch e { e })
