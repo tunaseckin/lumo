@@ -149,7 +149,14 @@ bool gfx_frame(void) {
   CGImageRelease(img);
 
   // LUMO_SNAPSHOT=out.png LUMO_SNAPSHOT_FRAME=n saves frame n and quits (for tests and screenshots)
+  // LUMO_RECORD=dir saves every second frame as dir/00001.png ... (for GIFs; time then runs at a steady 1/60 s)
   frames++;
+  const char *rec = getenv("LUMO_RECORD");
+  if (rec && frames % 2 == 0) {
+    char path[1024];
+    snprintf(path, sizeof path, "%s/%05ld.png", rec, frames / 2);
+    gfx_screenshot(path);
+  }
   const char *snap = getenv("LUMO_SNAPSHOT");
   if (snap) {
     const char *at = getenv("LUMO_SNAPSHOT_FRAME");
@@ -168,7 +175,7 @@ bool gfx_frame(void) {
   clicked_now = false;
 
   double t = now_s();
-  delta = t - last_time;
+  delta = rec ? 1.0 / 60 : t - last_time; /* recording is slower than real time; keep the game's clock steady */
   last_time = t;
   [pool drain];
   pool = [NSAutoreleasePool new];

@@ -2,6 +2,11 @@
 
 A small, readable programming language with no surprises. One C file, no dependencies, about as fast as Python, and much faster with `--fast`.
 
+<p align="center">
+  <img src="docs/bricks.gif" width="560" alt="A brick-breaking game written in Lumo: a ball bounces off a paddle and breaks rows of colored bricks">
+  <br><sub><a href="examples/bricks.lu">examples/bricks.lu</a>: a complete game in about 200 lines of Lumo</sub>
+</p>
+
 ```
 struct Todo { text: str, done: bool }
 
@@ -72,6 +77,8 @@ while gfx.frame() {                      # 60 times a second, until the window c
 | `gfx.sound(name)` | play a system sound: `"Pop"`, `"Tink"`, `"Glass"`, `"Hero"`, `"Basso"`, ... |
 | `gfx.pixels(buf, w, h, palette?)` | draw a w×h image over the whole window; `buf` holds `0xRRGGBB` colors or indexes into a 256-color palette |
 | `gfx.screenshot(path)` | save the frame as PNG |
+
+To record a game, run it with `LUMO_RECORD=some/folder`: every second frame is saved as a PNG (turn them into a GIF with ffmpeg).
 
 Colors are names (`"red"`, `"orange"`, `"navy"`, ...), `"#rrggbb"`/`"#rrggbbaa"`, or `[r, g, b]`/`[r, g, b, a]` with parts from 0 to 255. Coordinates are in points with (0, 0) at the top left. Games packaged with `lumo build` run on any Mac.
 
