@@ -52,7 +52,7 @@ jobs:
       - uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
-          install: make vim zip mingw-w64-ucrt-x86_64-gcc
+          install: make vim zip diffutils mingw-w64-ucrt-x86_64-gcc
       - name: Build and test
         run: make test
       - name: Package
