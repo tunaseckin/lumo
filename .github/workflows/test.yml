@@ -10,8 +10,50 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install xxd (Linux)
+      - name: Install xxd and a virtual display (Linux)
         if: runner.os == 'Linux'
-        run: command -v xxd || (sudo apt-get update && sudo apt-get install -y xxd)
+        run: sudo apt-get update && sudo apt-get install -y xxd xvfb
       - name: Build and test
         run: make test
+      - name: Graphics screenshot (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          out=$(./lumo examples/bricks.lu 2>&1) && exit 1   # no display: a clear error, not a crash
+          echo "$out" | grep -q "can't connect to a display"
+          BRICKS_DEMO=1 LUMO_SNAPSHOT=bricks-linux.png LUMO_SNAPSHOT_FRAME=120 xvfb-run -a ./lumo examples/bricks.lu
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: screenshot-linux
+          path: bricks-linux.png
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    env:
+      CC: gcc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: make vim mingw-w64-ucrt-x86_64-gcc
+      - name: Build and test
+        run: make test
+      - name: Graphics screenshot
+        run: BRICKS_DEMO=1 LUMO_SNAPSHOT=bricks-windows.png LUMO_SNAPSHOT_FRAME=120 ./lumo examples/bricks.lu
+      - name: Runs outside MSYS2, from a folder with Turkish letters
+        shell: pwsh
+        run: |
+          [Console]::OutputEncoding = [Text.Encoding]::UTF8
+          New-Item -ItemType Directory -Force "çalışma" | Out-Null
+          Copy-Item lumo.exe "çalışma\"
+          Set-Content -Encoding utf8NoBOM "çalışma\merhaba.lu" 'print("merhaba ${1 + 1} ğüşıöç")'
+          $out = & ".\çalışma\lumo.exe" "çalışma\merhaba.lu"
+          if ($out -ne "merhaba 2 ğüşıöç") { throw "got: $out" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-windows
+          path: bricks-windows.png

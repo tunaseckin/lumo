@@ -1,4 +1,4 @@
-# Push a tag like v0.1.0 to build lumo for macOS and Linux and attach it to a GitHub release.
+# Push a tag like v0.1.0 to build lumo for macOS, Linux and Windows and attach it to a GitHub release.
 name: release
 on:
   push:
@@ -34,3 +34,29 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: lumo-*.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    env:
+      CC: gcc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: make vim zip mingw-w64-ucrt-x86_64-gcc
+      - name: Build and test
+        run: make test
+      - name: Package
+        run: |
+          dir="lumo-${GITHUB_REF_NAME}-windows-x64"
+          mkdir "$dir"
+          cp lumo.exe README.md LICENSE "$dir"/
+          cp -r examples docs "$dir"/
+          zip -qr "$dir.zip" "$dir"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: lumo-*.zip

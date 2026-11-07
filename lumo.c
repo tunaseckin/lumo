@@ -22,8 +22,26 @@
 #include <time.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <direct.h>
+#include <io.h>
+#define WIFEXITED(s) 1 /* pclose returns the exit code itself */
+#define WEXITSTATUS(s) (s)
+#define localtime_r(t, tm) localtime_s(tm, t)
+#ifndef popen
+#define popen _popen
+#define pclose _pclose
+#endif
+#define CC "gcc"
+static char *mkdtemp(char *tpl) { return _mktemp(tpl) && _mkdir(tpl) == 0 ? tpl : NULL; }
+#else
 #include <sys/wait.h>
 #include <unistd.h>
+#define CC "cc"
+#endif
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
@@ -678,11 +696,31 @@ static char *read_file(const char *path) {
   return b.s;
 }
 
+static const char *path_base(const char *p) { /* what follows the last / (or \ on Windows) */
+  const char *b = strrchr(p, '/');
+#ifdef _WIN32
+  const char *b2 = strrchr(p, '\\');
+  if (!b || (b2 && b2 > b)) b = b2;
+#endif
+  return b ? b + 1 : p;
+}
+
+static const char *tmp_dir(void) {
+  const char *t = getenv("TMPDIR");
+#ifdef _WIN32
+  if (!t) t = getenv("TEMP");
+  return t ? t : ".";
+#else
+  return t ? t : "/tmp";
+#endif
+}
+
 /* an import path is relative to the importing file */
 static Str *resolve_import(const char *from, Str *path) {
-  const char *dir_end = strrchr(from, '/');
-  if (path->chars[0] == '/' || !dir_end) return path;
-  int dl = (int)(dir_end - from) + 1;
+  const char *base = path_base(from);
+  bool absolute = path->chars[0] == '/' || path->chars[0] == '\\' || (path->len > 1 && path->chars[1] == ':');
+  if (absolute || base == from) return path;
+  int dl = (int)(base - from);
   char *full = malloc(dl + path->len + 1);
   memcpy(full, from, dl);
   memcpy(full + dl, path->chars, path->len + 1);
@@ -710,6 +748,9 @@ static const char *embedded_source(const char *path) {
 static bool self_path(char *buf, uint32_t size) {
 #ifdef __APPLE__
   return _NSGetExecutablePath(buf, &size) == 0;
+#elif defined(_WIN32)
+  DWORD n = GetModuleFileNameA(NULL, buf, size);
+  return n > 0 && n < size;
 #else
   ssize_t n = readlink("/proc/self/exe", buf, size - 1);
   if (n <= 0) return false;
@@ -2807,7 +2848,7 @@ static bool cg_function(CFn *f) {
 }
 
 /* translates the main file's eligible functions (its tokens are in toks); returns how many */
-static int cgen_program(const char *path, Buf *out) {
+static int cgen_program(const char *path, Buf *out, bool quiet) {
   ncfns = 0;
   int depth = 0;
   for (int i = 0; i + 1 < ntoks; i++) {
@@ -2897,9 +2938,9 @@ static int cgen_program(const char *path, Buf *out) {
   }
   bputs(out, "}\n");
 
-  for (int i = 0; i < ncfns; i++)
+  for (int i = 0; i < ncfns && !quiet; i++)
     if (cfns[i].ok) printf("  native:      %.*s\n", cfns[i].name->len, cfns[i].name->start);
-  for (int i = 0; i < ncfns; i++)
+  for (int i = 0; i < ncfns && !quiet; i++)
     if (!cfns[i].ok) printf("  interpreted: %.*s (it %s)\n", cfns[i].name->len, cfns[i].name->start, cfns[i].why);
   return n;
 }
@@ -4289,9 +4330,15 @@ static bool n_json_decode(int argc, Value *args, Value *out) {
 static bool n_now(int argc, Value *args, Value *out) {
   (void)argc;
   (void)args;
+#ifdef _WIN32
+  FILETIME ft; /* 100 ns steps since 1601 */
+  GetSystemTimeAsFileTime(&ft);
+  *out = NUM_V(((uint64_t)ft.dwHighDateTime << 32 | ft.dwLowDateTime) / 1e7 - 11644473600.0);
+#else
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
   *out = NUM_V(ts.tv_sec + ts.tv_nsec / 1e9);
+#endif
   return true;
 }
 
@@ -4302,8 +4349,12 @@ static bool n_sleep(int argc, Value *args, Value *out) {
   double s = args[0].as.n;
   if (s < 0) return nerr("can't sleep a negative time");
   fflush(stdout);
+#ifdef _WIN32
+  Sleep((DWORD)(s * 1000));
+#else
   struct timespec ts = {(time_t)s, (long)((s - floor(s)) * 1e9)};
   nanosleep(&ts, NULL);
+#endif
   return true;
 }
 
@@ -4357,6 +4408,74 @@ static bool n_append_file(int argc, Value *args, Value *out) {
   return true;
 }
 
+#ifdef _WIN32
+/* Windows passes one command line that the program splits again, so each argument is quoted
+ * the way the C runtime unquotes it: backslashes only matter before a quote */
+static bool win_start(const char *dir, char *const argv[], HANDLE out, PROCESS_INFORMATION *pi) {
+  Buf cmd = {0};
+  for (int i = 0; argv[i]; i++) {
+    buf_add(&cmd, i ? " \"" : "\"", i ? 2 : 1);
+    for (const char *p = argv[i];; p++) {
+      int slashes = 0;
+      while (*p == '\\') slashes++, p++;
+      if (*p == '"' || !*p) slashes *= 2; /* doubled before a quote (ours or theirs) */
+      for (int k = 0; k < slashes + (*p == '"'); k++) buf_add(&cmd, "\\", 1);
+      if (!*p) break;
+      buf_add(&cmd, p, 1);
+    }
+    buf_add(&cmd, "\"", 1);
+  }
+  STARTUPINFOA si = {0};
+  si.cb = sizeof si;
+  if (out) {
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdOutput = out;
+    si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+  }
+  BOOL ok = CreateProcessA(NULL, cmd.s, NULL, NULL, TRUE, 0, NULL, dir, &si, pi);
+  free(cmd.s);
+  return ok;
+}
+
+static int win_wait(PROCESS_INFORMATION *pi) {
+  DWORD code = 0;
+  WaitForSingleObject(pi->hProcess, INFINITE);
+  GetExitCodeProcess(pi->hProcess, &code);
+  CloseHandle(pi->hProcess);
+  CloseHandle(pi->hThread);
+  return (int)code;
+}
+#endif
+
+/* runs argv without a shell (in dir, if given); returns its exit status, 127 if it couldn't start */
+static int spawn_wait(const char *dir, char *const argv[]) {
+  fflush(stdout);
+#ifdef _WIN32
+  PROCESS_INFORMATION pi;
+  return win_start(dir, argv, NULL, &pi) ? win_wait(&pi) : 127;
+#else
+  pid_t pid = fork();
+  if (pid < 0) return -1;
+  if (pid == 0) {
+    if (dir && chdir(dir)) _exit(126);
+    execvp(argv[0], argv);
+    _exit(127);
+  }
+  int status;
+  if (waitpid(pid, &status, 0) < 0) return -1;
+  return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+#endif
+}
+
+static Value run_result(Buf *b, int code) { /* {output, code} */
+  Map *m = new_map();
+  map_set(m, OBJ_V(cstr("output")), OBJ_V(intern(b->s ? b->s : "", b->len)));
+  map_set(m, OBJ_V(cstr("code")), NUM_V(code));
+  free(b->s);
+  return OBJ_V(m);
+}
+
 /* run(["prog", "arg", ...]): starts prog directly, so arguments are never parsed by a shell */
 static bool run_argv(List *l, Value *out) {
   if (!l->len || l->len > 255) return nerr("give the program and its arguments: run([\"ls\", \"-l\"])");
@@ -4366,6 +4485,23 @@ static bool run_argv(List *l, Value *out) {
     argv[i] = AS_STR(l->items[i])->chars;
   }
   argv[l->len] = NULL;
+  Buf b = {0};
+  char chunk[4096];
+#ifdef _WIN32
+  SECURITY_ATTRIBUTES sa = {sizeof sa, NULL, TRUE};
+  HANDLE rd, wr;
+  if (!CreatePipe(&rd, &wr, &sa, 0)) return nerr("can't run '%s'", argv[0]);
+  SetHandleInformation(rd, HANDLE_FLAG_INHERIT, 0);
+  fflush(stdout);
+  PROCESS_INFORMATION pi;
+  bool started = win_start(NULL, argv, wr, &pi);
+  CloseHandle(wr);
+  DWORD n;
+  while (started && ReadFile(rd, chunk, sizeof chunk, &n, NULL) && n > 0) buf_add(&b, chunk, (int)n);
+  CloseHandle(rd);
+  *out = run_result(&b, started ? win_wait(&pi) : 127);
+  return true;
+#else
   int fds[2];
   if (pipe(fds)) return nerr("can't run '%s'", argv[0]);
   fflush(stdout);
@@ -4379,19 +4515,14 @@ static bool run_argv(List *l, Value *out) {
     _exit(127);
   }
   close(fds[1]);
-  Buf b = {0};
-  char chunk[4096];
   ssize_t n;
   while ((n = read(fds[0], chunk, sizeof chunk)) > 0) buf_add(&b, chunk, (int)n);
   close(fds[0]);
   int status = 0;
   waitpid(pid, &status, 0);
-  Map *m = new_map();
-  map_set(m, OBJ_V(cstr("output")), OBJ_V(intern(b.s ? b.s : "", b.len)));
-  map_set(m, OBJ_V(cstr("code")), NUM_V(WIFEXITED(status) ? WEXITSTATUS(status) : -1));
-  free(b.s);
-  *out = OBJ_V(m);
+  *out = run_result(&b, WIFEXITED(status) ? WEXITSTATUS(status) : -1);
   return true;
+#endif
 }
 
 /* run("shell command") or run([prog, args...]): {output: str, code: num} */
@@ -4407,11 +4538,7 @@ static bool n_run(int argc, Value *args, Value *out) {
   size_t n;
   while ((n = fread(chunk, 1, sizeof chunk, p)) > 0) buf_add(&b, chunk, (int)n);
   int status = pclose(p);
-  Map *m = new_map();
-  map_set(m, OBJ_V(cstr("output")), OBJ_V(intern(b.s ? b.s : "", b.len)));
-  map_set(m, OBJ_V(cstr("code")), NUM_V(WIFEXITED(status) ? WEXITSTATUS(status) : -1));
-  free(b.s);
-  *out = OBJ_V(m);
+  *out = run_result(&b, WIFEXITED(status) ? WEXITSTATUS(status) : -1);
   return true;
 }
 
@@ -4423,7 +4550,7 @@ static bool n_env(int argc, Value *args, Value *out) {
   return true;
 }
 
-/* --- graphics: gfx.* (macOS backend in gfx_macos.m; other builds get stubs that say so) --- */
+/* --- graphics: gfx.* (gfx_macos.m on macOS, gfx.c on Windows and Linux; plain `cc lumo.c` builds get stubs that say so) --- */
 
 bool gfx_window(int w, int h, const char *title);
 bool gfx_frame(void);
@@ -4526,7 +4653,7 @@ static bool g_window(int argc, Value *args, Value *out) {
   if (gfx_open) return nerr("a window is already open");
   if (args[0].as.n < 1 || args[1].as.n < 1 || args[0].as.n > 8000 || args[1].as.n > 8000) return nerr("window size out of range");
 #ifndef LUMO_GFX
-  return nerr("graphics need the macOS build of lumo for now (build it with: make)");
+  return nerr("this lumo was built without graphics (build it with: make)");
 #endif
   if (!gfx_window((int)args[0].as.n, (int)args[1].as.n, argc > 2 ? AS_STR(args[2])->chars : "Lumo"))
     return nerr("couldn't open a window");
@@ -4804,22 +4931,6 @@ static bool interpret(const char *src, const char *name, Value *result) {
 }
 
 /* lumo build app.lu [-o app]: one executable with the program and everything it imports */
-/* writes lumo's source plus the generated C to a temp dir and compiles it; returns the executable */
-/* runs argv without a shell (in dir, if given); returns its exit status, 127 if it couldn't start */
-static int spawn_wait(const char *dir, char *const argv[]) {
-  fflush(stdout);
-  pid_t pid = fork();
-  if (pid < 0) return -1;
-  if (pid == 0) {
-    if (dir && chdir(dir)) _exit(126);
-    execvp(argv[0], argv);
-    _exit(127);
-  }
-  int status;
-  if (waitpid(pid, &status, 0) < 0) return -1;
-  return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-}
-
 static bool write_whole(const char *path, const void *data, size_t len) {
   FILE *f = fopen(path, "wb");
   if (!f) return false;
@@ -4835,42 +4946,61 @@ static char *compile_native(Buf *gen, long *len) {
   fprintf(stderr, "error: --fast needs lumo built with `make` (it carries its own source)\n");
   return NULL;
 #else
-  const char *tmp = getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp";
-  char dir[1024], src_path[1200], exe_path[1200], gfx_path[1200];
+  const char *tmp = tmp_dir();
+  char dir[1024], path[1200];
   snprintf(dir, sizeof dir, "%s/lumo_fast_XXXXXX", tmp);
   if (!mkdtemp(dir)) { fprintf(stderr, "error: can't make a temp directory in %s\n", tmp); return NULL; }
-  snprintf(src_path, sizeof src_path, "%s/prog.c", dir);
-  snprintf(exe_path, sizeof exe_path, "%s/prog", dir);
-  snprintf(gfx_path, sizeof gfx_path, "%s/gfx_macos.m", dir);
   Buf prog = {0};
   buf_add(&prog, (const char *)lumo_c, (int)lumo_c_len);
   buf_add(&prog, gen->s, gen->len);
-  bool ok = write_whole(src_path, prog.s, prog.len);
+  struct { const char *name; const void *data; size_t len; } files[] = {
+      {"prog.c", prog.s, (size_t)prog.len},
+#if defined(LUMO_GFX) && defined(__APPLE__)
+      {"gfx_macos.m", gfx_macos_m, gfx_macos_m_len},
+#elif defined(LUMO_GFX)
+      {"gfx.c", gfx_c, gfx_c_len},
+      {"gfx_font.h", gfx_font_h, gfx_font_h_len},
+#endif
+  };
+  int nfiles = (int)(sizeof files / sizeof *files);
+  bool ok = true;
+  for (int i = 0; i < nfiles; i++) {
+    snprintf(path, sizeof path, "%s/%s", dir, files[i].name);
+    ok = ok && write_whole(path, files[i].data, files[i].len);
+  }
   if (getenv("LUMO_KEEP_C")) write_whole(getenv("LUMO_KEEP_C"), prog.s, prog.len); /* to read or debug it */
   free(prog.s);
-  char *argv[16] = {"cc", "-O2", "-w", "-DLUMO_COMPILED", "-o", "prog", "prog.c"};
+  char *argv[16] = {CC, "-O2", "-w", "-DLUMO_COMPILED", "-o", "prog.exe", "prog.c"}; /* .exe: Windows needs it, it's harmless elsewhere */
   int n = 7;
-#ifdef LUMO_GFX
-  ok = ok && write_whole(gfx_path, gfx_macos_m, gfx_macos_m_len);
-  char *gfx[] = {"-DLUMO_GFX", "gfx_macos.m", "-framework", "Cocoa", "-framework", "QuartzCore", "-framework", "ImageIO"};
-  for (int i = 0; i < 8; i++) argv[n++] = gfx[i];
+#if defined(LUMO_GFX) && defined(__APPLE__)
+  char *gfx[] = {"-DLUMO_GFX", "gfx_macos.m", "-framework", "Cocoa", "-framework", "QuartzCore", "-framework", "ImageIO", NULL};
+#elif defined(LUMO_GFX) && defined(_WIN32)
+  char *gfx[] = {"-DLUMO_GFX", "gfx.c", "-lgdi32", "-lwinmm", NULL};
+#elif defined(LUMO_GFX)
+  char *gfx[] = {"-DLUMO_GFX", "gfx.c", "-ldl", NULL};
+#else
+  char *gfx[] = {NULL};
 #endif
+  for (int i = 0; gfx[i]; i++) argv[n++] = gfx[i];
   argv[n++] = "-lm";
   argv[n] = NULL;
   int rc = ok ? spawn_wait(dir, argv) : -1;
   char *exe = NULL;
   FILE *f;
-  if (rc == 0 && (f = fopen(exe_path, "rb"))) {
+  snprintf(path, sizeof path, "%s/prog.exe", dir);
+  if (rc == 0 && (f = fopen(path, "rb"))) {
     fseek(f, 0, SEEK_END);
     *len = ftell(f);
     fclose(f);
-    exe = read_file(exe_path);
+    exe = read_file(path);
   } else {
-    fprintf(stderr, "error: the C compiler failed%s\n", rc == 127 ? " (is `cc` installed?)" : "");
+    fprintf(stderr, "error: the C compiler failed%s\n", rc == 127 ? " (is `" CC "` installed?)" : "");
   }
-  unlink(src_path);
-  unlink(gfx_path);
-  unlink(exe_path);
+  unlink(path);
+  for (int i = 0; i < nfiles; i++) {
+    snprintf(path, sizeof path, "%s/%s", dir, files[i].name);
+    unlink(path);
+  }
   rmdir(dir);
   return exe;
 #endif
@@ -4888,12 +5018,7 @@ static int build(const char *main_path, const char *out, bool fast, bool quiet) 
     if (!src) { fprintf(stderr, "error: can't read '%s'\n", files[i]); return 1; }
     /* compile it now so mistakes show up at build time, not on someone else's computer */
     if (!compile(src, cstr(files[i]), new_map(), i > 0)) { free(src); return 1; }
-    if (fast && i == 0) { /* the main file's typed functions become C */
-      FILE *real = stdout;
-      if (quiet) stdout = fopen("/dev/null", "w");
-      cgen_program(files[0], &native);
-      if (quiet) { fclose(stdout); stdout = real; }
-    }
+    if (fast && i == 0) cgen_program(files[0], &native, quiet); /* the main file's typed functions become C */
     buf_add(&pak, files[i], (int)strlen(files[i]) + 1);
     buf_add(&pak, src, (int)strlen(src) + 1);
     for (int t = 0; t + 1 < ntoks; t++) { /* compile() left this file's tokens in toks (they point into src) */
@@ -4933,7 +5058,9 @@ static int build(const char *main_path, const char *out, bool fast, bool quiet) 
   fwrite(&len, 1, 8, o);
   fwrite(PAK_MAGIC, 1, 8, o);
   fclose(o);
+#ifndef _WIN32
   chmod(out, 0755);
+#endif
   if (!quiet) printf("built %s (%d file%s, %ld KB)\n", out, nfiles, nfiles == 1 ? "" : "s", (exe_len + pak.len + 1023) / 1024);
   free(native.s);
   free(exe);
@@ -4972,6 +5099,10 @@ static int brace_balance(const char *s) {
 }
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+  SetConsoleOutputCP(CP_UTF8); /* Lumo strings are UTF-8: ç, ş, ğ print as themselves */
+  SetConsoleCP(CP_UTF8);
+#endif
   vm.sp = vm.stack;
   vm.next_gc = 1u << 20;
   vm.globals = new_map();
@@ -5069,21 +5200,20 @@ int main(int argc, char **argv) {
   if (argc > 1 && (!strcmp(argv[1], "--version") || !strcmp(argv[1], "-v"))) { puts("lumo " LUMO_VERSION); return 0; }
   if (argc > 2 && !strcmp(argv[1], "--fast")) { /* build to a temp file, then run it in our place */
     char out[1024];
-    snprintf(out, sizeof out, "%s/lumo_run_XXXXXX", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp");
+    snprintf(out, sizeof out, "%s/lumo_run_XXXXXX", tmp_dir());
+#ifdef _WIN32
+    if (!_mktemp(out)) { fprintf(stderr, "error: can't make a temp file\n"); return 70; }
+    strcat(out, ".exe");
+#else
     int fd = mkstemp(out); /* a fresh file nobody else can swap out */
     if (fd < 0) { fprintf(stderr, "error: can't make a temp file\n"); return 70; }
     close(fd);
+#endif
     if (build(argv[2], out, true, true)) { unlink(out); return 70; }
-    pid_t pid = fork();
-    if (pid == 0) {
-      argv[2] = out;
-      execv(out, argv + 2);
-      _exit(127);
-    }
-    int status = 0;
-    waitpid(pid, &status, 0);
+    argv[2] = out;
+    int rc = spawn_wait(NULL, argv + 2);
     unlink(out);
-    return WIFEXITED(status) ? WEXITSTATUS(status) : 70;
+    return rc < 0 ? 70 : rc;
   }
   if (argc > 2 && !strcmp(argv[1], "build")) {
     bool fast = !strcmp(argv[2], "--fast");
@@ -5093,12 +5223,15 @@ int main(int argc, char **argv) {
     if (argc > a + 2 && !strcmp(argv[a + 1], "-o")) {
       snprintf(out, sizeof out, "%s", argv[a + 2]);
     } else { /* examples/todo.lu -> todo */
-      const char *base = strrchr(argv[a], '/');
-      snprintf(out, sizeof out, "%s", base ? base + 1 : argv[a]);
+      snprintf(out, sizeof out, "%s", path_base(argv[a]));
       char *dot = strrchr(out, '.');
       if (dot && dot != out) *dot = 0;
       if (!strcmp(out, argv[a])) strcat(out, ".out");
     }
+#ifdef _WIN32
+    size_t ol = strlen(out); /* Windows only runs programs whose name ends in .exe */
+    if ((ol < 4 || _stricmp(out + ol - 4, ".exe")) && ol + 4 < sizeof out) strcat(out, ".exe");
+#endif
     return build(argv[a], out, fast, false);
   }
   if (argc > 1) {

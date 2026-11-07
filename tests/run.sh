@@ -5,13 +5,18 @@ cd "$(dirname "$0")/.." || exit 1
 make -s lumo || exit 1   # the real build (with graphics on macOS)
 ./lumo tests/test.lu || exit 1
 # memory/UB check (skipped if the sanitizer build fails)
-if cc -g -O1 -fsanitize=address,undefined -o "${TMPDIR:-/tmp}/lumo_asan" lumo.c -lm 2>/dev/null; then
+CC="${CC:-cc}"
+if $CC -g -O1 -fsanitize=address,undefined -o "${TMPDIR:-/tmp}/lumo_asan" lumo.c -lm 2>/dev/null; then
   # memory errors only: types and the last objects are deliberately freed by process exit, not one by one
   ASAN_OPTIONS=detect_leaks=0 "${TMPDIR:-/tmp}/lumo_asan" tests/test.lu > /dev/null || { echo "FAIL: sanitizer"; exit 1; }
 fi
 
+# each snippet runs from a file in tests/ (so imports resolve the same everywhere, Windows too)
+snippet=tests/_snippet.lu
+trap 'rm -f "$snippet"' EXIT
 check() {
-  out=$(printf '%s\n' "$1" | ./lumo /dev/stdin 2>&1)
+  printf '%s\n' "$1" > "$snippet"
+  out=$(./lumo "$snippet" 2>&1)
   case "$out" in
     *"$2"*) ;;
     *) echo "FAIL: $1"; echo "  wanted: $2"; echo "  got:    $out"; exit 1 ;;
@@ -78,8 +83,8 @@ check 'let s = "a${1 2}"' "expected '}'"
 check 'let s = "a${1' 'unterminated string'
 check 'import "nope.lu"' "can't read"
 check 'import "my-mod.lu"' 'as name'
-check "import \"$PWD/tests/testlib/geo.lu\" as geo
-geo.nope" 'not found'
+check 'import "testlib/geo.lu" as geo
+geo.nope' 'not found'
 check 'struct P { x: num }
 P("a")' 'P: x should be num, got str'
 check 'struct P { x: num }
@@ -193,7 +198,8 @@ for y in ys { y = y + 4 }' "'y' is the loop variable; changing it doesn't change
 check 'write_file("a.txt", 5)' 'str(x) turns a number into text'
 check 'read_file("/nonexistent/x.txt")' 'exists(path) checks'
 # a global declared further down is fine (not reported as undefined)
-out=$(printf 'fn later() { early }\nlet early = 1\nprint(later())\n' | ./lumo /dev/stdin 2>&1)
+printf 'fn later() { early }\nlet early = 1\nprint(later())\n' > "$snippet"
+out=$(./lumo "$snippet" 2>&1)
 [ "$out" = "1" ] || { echo "FAIL: later-declared global: $out"; exit 1; }
 # lumo build: a standalone executable that carries its imports
 tmp="${TMPDIR:-/tmp}/lumo_build_test_$$"
@@ -209,9 +215,10 @@ printf 'print(nope)\n' > "$tmp/bad.lu"
 rm -rf "$tmp"
 # graphics: clear errors without a window, and in builds without graphics
 check 'gfx.rect(0, 0, 10, 10, "red")' 'open a window first'
-cc -O2 -o "${TMPDIR:-/tmp}/lumo_plain" lumo.c -lm || exit 1
-out=$(printf 'gfx.window(10, 10)\n' | "${TMPDIR:-/tmp}/lumo_plain" /dev/stdin 2>&1)
-case "$out" in *"graphics need the macOS build"*) ;; *) echo "FAIL: plain build gfx: $out"; exit 1 ;; esac
+$CC -O2 -o "${TMPDIR:-/tmp}/lumo_plain" lumo.c -lm || exit 1
+printf 'gfx.window(10, 10)\n' > "$snippet"
+out=$("${TMPDIR:-/tmp}/lumo_plain" "$snippet" 2>&1)
+case "$out" in *"built without graphics"*) ;; *) echo "FAIL: plain build gfx: $out"; exit 1 ;; esac
 # lumo --fast: typed functions compiled to C must behave exactly like the interpreter
 tmp="${TMPDIR:-/tmp}/lumo_fast_test_$$"
 mkdir -p "$tmp"
